@@ -1,3 +1,4 @@
+#pragma once
 #include <sycl/sycl.hpp>
 #include "vector_gpu.hpp"
 
@@ -48,12 +49,17 @@ public:
     bool  alive;
 };
 
+
+template<>
+struct sycl::is_device_copyable<Particle> : std::true_type {};
+
+
 class Particle_system
 {
 public:
-    Particle_system(size_t p_count): m_countAlive(0), q(sycl::gpu_selector_v), buf(nullptr, sycl::range<1>(0)){
+    Particle_system(size_t p_count): m_countAlive(0), q(sycl::gpu_selector_v), buf(m_particle.data(), sycl::range<1>(p_count)){
         m_particle.resize(p_count);
-        buf = sycl::buffer<Particle, 1>(m_particle.data(), sycl::range<1>(p_count));
+        // buf = sycl::buffer<Particle, 1>(m_particle.data(), sycl::range<1>(p_count));
     }
     
     void kill(std::vector<size_t> k)
@@ -65,6 +71,7 @@ public:
         // sycl::buffer<Particle, 1> buf(m_particle.data(), sycl::range<1>(m_particle.size()));
         sycl::buffer<size_t, 1> k_buf(k.data(), sycl::range<1>(k.size()));
         size_t k_size = k.size();
+        size_t count_alive = m_countAlive;
         
         q.submit([&](sycl::handler &h){
             auto buf_acc = buf.template get_access<sycl::access::mode::read_write>(h);
@@ -72,8 +79,8 @@ public:
             h.parallel_for(sycl::range<1>(k.size()), [=](size_t idx){
                 size_t index = k_acc[idx];
                 buf_acc[index].alive = false;
-                Particle tmp = buf_acc[(m_countAlive - ((k_size - idx) - 1)) - 1];
-                buf_acc[(m_countAlive - ((k_size - idx) - 1)) - 1] = buf_acc[index];
+                Particle tmp = buf_acc[(count_alive - ((k_size - idx) - 1)) - 1];
+                buf_acc[(count_alive - ((k_size - idx) - 1)) - 1] = buf_acc[index];
                 buf_acc[index] = tmp;
             });
         });
@@ -115,15 +122,15 @@ public:
         if(w.size() == 0) return;
 
         w_size = w.size();
-
+        size_t count_alive = m_countAlive;
         q.submit([&](sycl::handler &h){
             auto buf_acc = buf.template get_access<sycl::access::mode::read_write>(h);
             auto w_acc = w_buf.template get_access<sycl::access::mode::read>(h);
             h.parallel_for(sycl::range<1>(w.size()), [=](size_t idx){
                 size_t index = w_acc[idx];
                 buf_acc[index].alive = true;
-                Particle tmp = buf_acc[m_countAlive + idx];
-                buf_acc[m_countAlive + idx] = buf_acc[index];
+                Particle tmp = buf_acc[count_alive + idx];
+                buf_acc[count_alive + idx] = buf_acc[index];
                 buf_acc[index] = tmp;
             });
         });
