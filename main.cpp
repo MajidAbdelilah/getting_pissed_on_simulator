@@ -4,6 +4,19 @@
 #include <sycl/sycl.hpp>
 #include <iostream>
 #include "include/raylib.h"
+#include "vector_cpu.hpp"
+
+class fill_with_index
+{
+    public:
+    size_t startId;
+    fill_with_index(size_t start): startId(start){}
+    size_t operator()(size_t &value, size_t idx)
+    {
+        (void)value;
+        return startId + idx;
+    }
+};
 
 void emit(double dt, Particle_system &p, size_t m_emitRate)
 {
@@ -14,13 +27,16 @@ void emit(double dt, Particle_system &p, size_t m_emitRate)
     const size_t startId = p.m_countAlive;
     const size_t endId = std::min(startId + maxNewParticles, p.m_particle.size() -1);
     // std::cout << "startId: " << startId << ", endId: " << endId << "\n";
-    std::vector<size_t> w;
-    w.resize(endId - startId);
-    // std::cout << "startId: " << startId << ", endId: " << endId << "\n";
-    for (size_t i = startId; i < endId; ++i)  // << wake loop
-    {
-        w[i - startId] = i;
-    }
+    Lp_parallel_vector<size_t> w;
+    w.fill(fill_with_index(startId), endId - startId);
+    // w.resize(endId - startId);
+    // // std::cout << "startId: " << startId << ", endId: " << endId << "\n";
+    
+    
+    // for (size_t i = startId; i < endId; i++)
+    // {
+    //     w[i - startId] = i;
+    // }
     p.wake(w);
     Gen gen;
     // BasicVelGen bvg;
@@ -41,10 +57,80 @@ void emit(double dt, Particle_system &p, size_t m_emitRate)
     // w.clear();
 }
 
+void draw(Image &im, Texture2D &tex, size_t width, size_t hieght, Particle_system &p, sycl::queue &q)
+{
+    (void)p;
+    sycl::buffer<Color, 1> buf(((Color*)im.data), sycl::range<1>(im.width*im.height));
+    q.submit([&](sycl::handler &h){
+        auto acc = buf.get_access<sycl::access::mode::write>(h);
+        h.parallel_for(sycl::range<1>(width*hieght), [=](sycl::id<1> idx_d){
+            size_t idx = idx_d.get(0);
+            acc[idx] = BLACK;
+        });
+    }).wait();
+
+    sycl::buffer<Particle, 1> buf_p(p.m_particle);
+    
+    q.submit([&](sycl::handler &h){
+        auto acc = buf_p.get_access<sycl::access::mode::read>(h);
+        auto acc_im = buf.get_access<sycl::access::mode::write>(h);
+        h.parallel_for(sycl::range<1>(p.m_countAlive), [=](sycl::id<1> idx_d){
+            size_t idx = idx_d.get(0);
+            if(acc[idx].alive)
+            {
+                long x = (long)(acc[idx].pos.x());
+                long y = (long)(acc[idx].pos.y());
+                x+= width;
+                y+= hieght;
+                if((x < (long)width && x >= 0) 
+                && (y < (long)hieght && y >= 0))
+                {
+                    acc_im[y * im.width + x] = WHITE;
+                }
+            }
+        });
+    }).wait();
+
+    // for(size_t i = 0; i < p.m_countAlive; ++i)
+    // {
+    //     if(p.m_particle[i].alive)
+    //     {
+    //         size_t x = j % width;
+    //         size_t y = i;
+    //         ((Color*)im.data)[y*im.width + x] = (Color){ 0, 0, 0, 255 };
+    //     }    
+    // }
+    
+    
+
+    // for(size_t i = 0; i < p.m_countAlive; ++i)
+    // {
+    //     if(p.m_particle[i].alive)
+    //     {
+    //         size_t x = static_cast<size_t>(p.m_particle[i].pos.x());
+    //         size_t y = static_cast<size_t>(p.m_particle[i].pos.y());
+    //         x+= width;
+    //         y+= hieght;
+    //         if((x < width && x >= 0) 
+    //         && (y < hieght && y >= 0))
+    //         {
+    //             // std::cout << "x: " << x << ", y: " << y << "\n";
+    //             // std::cout << "color: " << p.m_particle[i].col.x() << ", " << p.m_particle[i].col.y() << ", " << p.m_particle[i].col.z() << ", " << p.m_particle[i].col.w() << "\n";
+    //             ImageDrawPixel(&im, x, y, WHITE);
+    //         }
+    //     }
+    // }
+    // UnloadImageColors(color);
+    UnloadTexture(tex);
+    tex =  LoadTextureFromImage(im);
+    DrawTexture(tex, -width, -hieght, {255, 255, 255, 255});
+    
+}
+
 int main()
 {
 
-    Particle_system system(400000);
+    Particle_system system(1000000);
     
     EulerUpdater eu;
 
@@ -57,7 +143,10 @@ int main()
     cam.offset = (Vector2){ screenWidth/2.0f, screenHeight/2.0f };
     cam.rotation = 0.0f;
     cam.zoom = 1.0f;
-
+    Image canvas = GenImageColor(screenWidth, screenHeight, {255, 255, 255, 255});
+    ImageFormat(&canvas, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+    Texture2D tex = LoadTextureFromImage(canvas);
+    // Color *color = LoadImageColors(canvas);
     while (!WindowShouldClose())
     {
         double dt = GetFrameTime();
@@ -65,31 +154,63 @@ int main()
         // Update
         // system.kill({ 0, 1, 2, 3, 4 });
         eu.update(dt, system);
-        emit(dt, system, 30000);
+        emit(dt, system, 70000);
         BeginDrawing();
         BeginMode2D(cam);
         ClearBackground(RAYWHITE);
         // system.m_countAlive = system.m_particle.size();
-        DrawCircle(200, 200, 100, BLACK);
+        // DrawCircle(200, 200, 100, BLACK);
+        draw(canvas, tex, screenWidth, screenHeight, system, system.q);
         if (system.m_countAlive > 0)
         {
             std::vector<size_t> to_kill;
-            for (size_t i = 0; i < system.m_countAlive; ++i)
+            to_kill.resize(system.m_countAlive);
+            size_t kill_count_total = 0;
+            const size_t thread_count = std::thread::hardware_concurrency();
+            std::vector<std::thread> threads(thread_count);
+            std::mutex mutex;
+
+            for(size_t i = 0; i < thread_count; ++i)
             {
-                if(system.m_particle[i].alive)
-                {
-                    DrawRectangle(system.m_particle[i].pos.x(), system.m_particle[i].pos.y(), 5, 5, Color{ (unsigned char)system.m_particle[i].col.x(), (unsigned char)system.m_particle[i].col.y(), (unsigned char)system.m_particle[i].col.z(), (unsigned char)system.m_particle[i].col.w() });
-                }else{
-                    to_kill.push_back(i);
-                }
-                // DrawText(TextFormat("Particle %d", i), system.m_particle[i].pos.x(), system.m_particle[i].pos.y(), 20, Color{ (unsigned char)system.m_particle[i].col.x(), (unsigned char)system.m_particle[i].col.y(), (unsigned char)system.m_particle[i].col.z(), (unsigned char)system.m_particle[i].col.w() });
-                // DrawText(TextFormat("Particle Position: (%.2f, %.2f)", system.m_particle[i].pos.x(), system.m_particle[i].pos.y()), system.m_particle[i].pos.x(), system.m_particle[i].pos.y() + 100, 20, DARKGRAY);
-                // DrawText(TextFormat("Particle Color: (%.2f, %.2f, %.2f, %.2f)", system.m_particle[i].col.x(), system.m_particle[i].col.y(), system.m_particle[i].col.z(), system.m_particle[i].col.w()), system.m_particle[i].pos.x(), system.m_particle[i].pos.y() + 40, 20, DARKGRAY);
-                // std::cout << "particle pos: " << system.m_particle[10].pos.x() << ", " << system.m_particle[10].pos.y() << std::endl;
-                // std::cout << "particle color: " << system.m_particle[i].startCol.x() << ", " << system.m_particle[i].startCol.y() << ", " << system.m_particle[i].startCol.z() << ", " << system.m_particle[i].startCol.w() << std::endl;
-                // std::cout << 
+                threads[i] = std::thread([&system, &to_kill, i, thread_count, &kill_count_total, &mutex](){
+                    size_t start = (system.m_countAlive / thread_count) * i;
+                    size_t end = (system.m_countAlive / thread_count) * (i + 1);
+                    if(i+1 == thread_count)
+                    {
+                        end = system.m_countAlive;
+                    }
+                    size_t kill_count_local = 0;
+                    for (size_t j = start; j < end; ++j)
+                    {
+                        to_kill[j] = SIZE_MAX;
+                        if (system.m_particle[j].alive == false || system.m_particle[j].time.x() < 0.0f){
+                            to_kill[kill_count_local + start] = j;
+                            kill_count_local++;
+                        }
+                    }
+                    std::cout << "thread: " << i << ", start: " << start << ", end: " << end << ", kill_count_local: " << kill_count_local  << " count alive: " << system.m_countAlive << "\n";
+
+                    std::lock_guard<std::mutex> lock(mutex);
+                    kill_count_total += kill_count_local;
+                });
             }
-            system.kill(to_kill);
+
+            for(size_t i = 0; i < thread_count; ++i)
+            {
+                threads[i].join();
+            }
+            // for (size_t i = 0; i < system.m_countAlive; ++i)
+            // {
+
+            //     if (system.m_particle[i].alive == false || system.m_particle[i].time.x() < 0.0f){
+            //         to_kill[kill_count] = i;
+            //         kill_count++;
+            //     }
+            // }
+            // to_kill.resize(kill_count);
+            std::cout << "kill_count: " << kill_count_total << "\n";
+            system.kill(to_kill, kill_count_total);
+
         }
         EndMode2D();
         DrawText("Particle System", 10, 10, 20, DARKGRAY);

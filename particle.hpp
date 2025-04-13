@@ -72,15 +72,16 @@ public:
         // buf = sycl::buffer<Particle, 1>(m_particle.data(), sycl::range<1>(p_count));
     }
     
-    void kill(std::vector<size_t> &k)
+    void kill(std::vector<size_t> &k, size_t kill_count)
     {
         if(m_countAlive == 0) return;
-        if(k.size() == 0) return;
-        if(k.size() > m_countAlive) throw std::runtime_error("k size is greater than m_countAlive " + std::to_string(k.size()) + ", " + std::to_string(m_countAlive));
+        if(k.size() == 0 || kill_count == 0) return;
+        if(kill_count > m_countAlive) throw std::runtime_error("k size is greater than m_countAlive " + std::to_string(kill_count) + ", " + std::to_string(m_countAlive));
         // Create SYCL buffer from the vector data
         // sycl::buffer<Particle, 1> buf(m_particle.data(), sycl::range<1>(m_particle.size()));
         sycl::buffer<Particle, 1> buf(m_particle);
         sycl::buffer<size_t, 1> k_buf(k);
+        
         // size_t k_size = k.size();
         size_t count_alive = m_countAlive;
         
@@ -90,8 +91,8 @@ public:
             h.parallel_for(sycl::range<1>(k.size()), [=](sycl::id<1> idx_d){
                 size_t idx = idx_d.get(0);
                 size_t index = k_acc[idx];
+                if(index == SIZE_MAX) return;
                 buf_acc[index].alive = false;
-                // float m_minTime = 10.1f;
                 float m_maxTime = 20.0f;
                 buf_acc[index].time.x() = buf_acc[index].time.y() = m_maxTime;
                 buf_acc[index].time.z() = (float)0.0;
@@ -107,7 +108,7 @@ public:
         q.wait();
         // std::cout << "her 2\n";
 
-        this->m_countAlive -= k.size();
+        this->m_countAlive -= kill_count;
         
     }
 
@@ -171,7 +172,7 @@ public:
 
     }
 
-    Lp_parallel_vector_GPU<Particle> m_particle;
+    std::vector<Particle> m_particle;
     sycl::queue q;
     // sycl::buffer<Particle, 1> buf;
     size_t m_countAlive{ 0 };

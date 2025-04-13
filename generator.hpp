@@ -26,14 +26,14 @@ public:
     float m_maxTime;
     sycl::queue q;
 public:
-    Gen(): m_pos(-400.0), m_maxStartPosOffset(100.0), m_minStartCol(150.0), m_maxStartCol(170.0), m_minEndCol(230.0), m_maxEndCol(255.0), m_minStartVel(20), m_maxStartVel(50), m_minTime(10.0f), m_maxTime(20.0f), q(sycl::cpu_selector_v) { }
+    Gen(): m_pos(-1000.0, -400.0, 0, 0), m_maxStartPosOffset(100.0), m_minStartCol(150.0), m_maxStartCol(170.0), m_minEndCol(230.0), m_maxEndCol(255.0), m_minStartVel(20), m_maxStartVel(50), m_minTime(10.0f), m_maxTime(20.0f), q(sycl::cpu_selector_v) { }
 
     void generate(Particle_system &p, size_t startId, size_t endId)
     {
         sycl::vec<float, 4> posMin{ m_pos.x() - m_maxStartPosOffset.x(), m_pos.y() - m_maxStartPosOffset.y(), m_pos.z() - m_maxStartPosOffset.z(), 1.0 };
         sycl::vec<float, 4> posMax{ m_pos.x() + m_maxStartPosOffset.x(), m_pos.y() + m_maxStartPosOffset.y(), m_pos.z() + m_maxStartPosOffset.z(), 1.0 };
         
-        sycl::buffer<Particle, 1> buf(p.m_particle);
+        // sycl::buffer<Particle, 1> buf(p.m_particle);
         
         // Determine number of threads to use
         const unsigned int numThreads = std::thread::hardware_concurrency();
