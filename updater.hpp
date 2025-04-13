@@ -44,12 +44,12 @@ public:
                                  0.0 };
         const float localDT = (float)dt;
     
-         unsigned int endId = p.m_countAlive;
+        const unsigned int endId = p.m_countAlive;
         
         // const size_t countAttractors = m_attractors.size();
         
         std::vector<size_t> to_kill;
-        // to_kill.resize(endId);
+        to_kill.reserve(endId); // Reserve space for to_kill
         sycl::buffer<Particle, 1> buf(p.m_particle);
         sycl::buffer<sycl::vec<float, 4>> m_attractors_buf(m_attractors);
         // size_t buf_size = p.m_particle.size();
@@ -60,10 +60,10 @@ public:
             // sycl::accessor m_attractors_acc = m_attractors_buf.template get_access<sycl::access_mode::read>(h);
             h.parallel_for(sycl::range<1>(endId), [=](sycl::id<1> idx_d){
                 size_t idx = idx_d.get(0);
-                if(buf_acc[idx].alive == false)
-                {
-                    return ;
-                }
+                // if(buf_acc[idx].alive == false)
+                // {
+                //     return ;
+                // }
                 buf_acc[idx].acc += globalA;
     
                 buf_acc[idx].vel += localDT * buf_acc[idx].acc;
@@ -110,7 +110,7 @@ public:
 
         q.wait();
         
-        // size_t kill_count = 0;
+        size_t kill_count = 0;
 
         for (size_t i = 0; i < endId; ++i)
         {
@@ -160,7 +160,7 @@ public:
             {
             // std::cout << "kill, time.x(): "<< p.m_particle[i].time.x()  << ", localDt: " << localDT << "\n";
 
-                // kill_count++;
+                kill_count++;        
                 to_kill.push_back(i);
 				// endId = p.m_countAlive < p.m_particle.size() ? p.m_countAlive : p.m_particle.size();
                 // p.m_particle[i].time = sycl::vec<float, 4>(20, 20, (float)0.0, (float)1.0 / p.m_particle[i].time.x());
@@ -168,7 +168,7 @@ public:
             }
         }
         // std::cout << "to_kill.size(): " << to_kill.size() << "\n";
-        // to_kill.resize(kill_count);
+        to_kill.resize(kill_count);
         p.kill(to_kill);
 
     }

@@ -19,17 +19,17 @@ void emit(double dt, Particle_system &p, size_t m_emitRate)
     // std::cout << "startId: " << startId << ", endId: " << endId << "\n";
     for (size_t i = startId; i < endId; ++i)  // << wake loop
     {
-        w.push_back(i);
+        w[i - startId] = i;
     }
     p.wake(w);
-    BoxPosGen bpg;
-    BasicVelGen bvg;
-    BasicColorGen bc;
-    BasicTimeGen btg;
-    bpg.generate(p, startId, endId);
-    bvg.generate(p, startId, endId);
-    bc.generate(p, startId, endId);
-    btg.generate(p, startId, endId);
+    Gen gen;
+    // BasicVelGen bvg;
+    // BasicColorGen bc;
+    // BasicTimeGen btg;
+    gen.generate(p, startId, endId);
+    // bvg.generate(p, startId, endId);
+    // bc.generate(p, startId, endId);
+    // btg.generate(p, startId, endId);
 
     
 
@@ -44,7 +44,7 @@ void emit(double dt, Particle_system &p, size_t m_emitRate)
 int main()
 {
 
-    Particle_system system(200000);
+    Particle_system system(400000);
     
     EulerUpdater eu;
 
@@ -65,7 +65,7 @@ int main()
         // Update
         // system.kill({ 0, 1, 2, 3, 4 });
         eu.update(dt, system);
-        emit(dt, system, 3000);
+        emit(dt, system, 30000);
         BeginDrawing();
         BeginMode2D(cam);
         ClearBackground(RAYWHITE);
@@ -73,10 +73,15 @@ int main()
         DrawCircle(200, 200, 100, BLACK);
         if (system.m_countAlive > 0)
         {
+            std::vector<size_t> to_kill;
             for (size_t i = 0; i < system.m_countAlive; ++i)
             {
-
-                DrawCircle(system.m_particle[i].pos.x(), system.m_particle[i].pos.y(), 5, Color{ (unsigned char)system.m_particle[i].col.x(), (unsigned char)system.m_particle[i].col.y(), (unsigned char)system.m_particle[i].col.z(), (unsigned char)system.m_particle[i].col.w() });
+                if(system.m_particle[i].alive)
+                {
+                    DrawRectangle(system.m_particle[i].pos.x(), system.m_particle[i].pos.y(), 5, 5, Color{ (unsigned char)system.m_particle[i].col.x(), (unsigned char)system.m_particle[i].col.y(), (unsigned char)system.m_particle[i].col.z(), (unsigned char)system.m_particle[i].col.w() });
+                }else{
+                    to_kill.push_back(i);
+                }
                 // DrawText(TextFormat("Particle %d", i), system.m_particle[i].pos.x(), system.m_particle[i].pos.y(), 20, Color{ (unsigned char)system.m_particle[i].col.x(), (unsigned char)system.m_particle[i].col.y(), (unsigned char)system.m_particle[i].col.z(), (unsigned char)system.m_particle[i].col.w() });
                 // DrawText(TextFormat("Particle Position: (%.2f, %.2f)", system.m_particle[i].pos.x(), system.m_particle[i].pos.y()), system.m_particle[i].pos.x(), system.m_particle[i].pos.y() + 100, 20, DARKGRAY);
                 // DrawText(TextFormat("Particle Color: (%.2f, %.2f, %.2f, %.2f)", system.m_particle[i].col.x(), system.m_particle[i].col.y(), system.m_particle[i].col.z(), system.m_particle[i].col.w()), system.m_particle[i].pos.x(), system.m_particle[i].pos.y() + 40, 20, DARKGRAY);
@@ -84,6 +89,7 @@ int main()
                 // std::cout << "particle color: " << system.m_particle[i].startCol.x() << ", " << system.m_particle[i].startCol.y() << ", " << system.m_particle[i].startCol.z() << ", " << system.m_particle[i].startCol.w() << std::endl;
                 // std::cout << 
             }
+            system.kill(to_kill);
         }
         EndMode2D();
         DrawText("Particle System", 10, 10, 20, DARKGRAY);

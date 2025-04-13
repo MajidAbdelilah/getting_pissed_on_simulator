@@ -117,33 +117,34 @@ public:
         // sycl::buffer<Particle, 1> buf(m_particle.data(), sycl::range<1>(m_particle.size()));
         sycl::buffer<size_t, 1> w_buf(w.data(), sycl::range<1>(w.size()));
         sycl::buffer<Particle, 1> buf(m_particle.data(), sycl::range<1>(m_particle.size()));
-        size_t w_size = w.size();
+        // size_t w_size = w.size();
         
         size_t erased = 0;
-        for(size_t idx = 0; idx < w_size; ++idx)
-        {
-            if(w[idx] >= m_countAlive && w[idx] < (m_countAlive + w_size))
-            {
-                // Swap the elements
-                m_particle[w[idx]].alive = true;
-                swap(m_particle[m_countAlive], m_particle[w[idx]]);
-                m_countAlive++;
-                // Particle tmp = m_particle[m_countAlive];
-                // m_particle[m_countAlive] = m_particle[w[idx]];
-                // m_particle[w[idx]] = tmp;
-                // m_particle[m_countAlive].alive = true;
-                // m_particle[w[idx]].alive = false;
+        // for(size_t idx = 0; idx < w_size; ++idx)
+        // {
+        //     // std::cout << w[idx] << "\n";
+        //     if(w[idx] >= m_countAlive && w[idx] < (m_countAlive + w_size) && m_countAlive > 0)
+        //     {
+        //         // Swap the elements
+        //         m_particle[w[idx]].alive = true;
+        //         swap(m_particle[m_countAlive], m_particle[w[idx]]);
+        //         m_countAlive++;
+        //         // Particle tmp = m_particle[m_countAlive];
+        //         // m_particle[m_countAlive] = m_particle[w[idx]];
+        //         // m_particle[w[idx]] = tmp;
+        //         // m_particle[m_countAlive].alive = true;
+        //         // m_particle[w[idx]].alive = false;
                 
-                // size_t size_tmp = w[(w.size() - erased)- 1]; // swap
-                // w[(w.size() - erased)- 1] = w[idx];
-                // w[idx] = size_tmp;
-                // erased++;
-                // idx--;
-                w[idx] = SIZE_MAX; // mark as erased
-                erased++;
-            }
-        }
-        std::sort(w.begin(), w.end());
+        //         // size_t size_tmp = w[(w.size() - erased)- 1]; // swap
+        //         // w[(w.size() - erased)- 1] = w[idx];
+        //         // w[idx] = size_tmp;
+        //         // erased++;
+        //         // idx--;
+        //         w[idx] = SIZE_MAX; // mark as erased
+        //         erased++;
+        //     }
+        // }
+        // std::sort(w.begin(), w.end());
         
 
         // w.resize(w.size() - erased);
@@ -154,6 +155,7 @@ public:
         q.submit([&](sycl::handler &h){
             auto buf_acc = buf.template get_access<sycl::access::mode::read_write>(h);
             auto w_acc = w_buf.template get_access<sycl::access::mode::read>(h);
+            // std::cout << "loop_size: " << w.size() - erased << ", " << w.size() << ", " << erased << "\n";
             h.parallel_for(sycl::range<1>(w.size() - erased), [=](sycl::id<1> idx_d){
                 size_t idx = idx_d.get(0);
                 size_t index = w_acc[idx];

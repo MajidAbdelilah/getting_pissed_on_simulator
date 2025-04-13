@@ -128,7 +128,7 @@ public:
             h.parallel_for(sycl::range<1>(size), [=](sycl::id<1> idx) {
                 acc[idx] = func(acc[idx], idx);
             });
-        });
+        }).wait();
         
         // Wait for operations to complete
         q.wait();
