@@ -14,12 +14,12 @@ sycl::vec<float, 4> random_vec(sycl::vec<float, 4> min, sycl::vec<float, 4> max)
 class BoxPosGen 
 {
 public:
-    sycl::vec<float, 4> m_pos{ 100.0 };
-    sycl::vec<float, 4> m_maxStartPosOffset{ 100.0 };
+    sycl::vec<float, 4> m_pos;
+    sycl::vec<float, 4> m_maxStartPosOffset;
 public:
-    BoxPosGen(): m_pos(100.0), m_maxStartPosOffset(100.0) { }
+    BoxPosGen(): m_pos(-400.0), m_maxStartPosOffset(100.0) { }
 
-    void generate(double dt, Particle_system &p, size_t startId, size_t endId)
+    void generate(Particle_system &p, size_t startId, size_t endId)
     {
         sycl::vec<float, 4> posMin{ m_pos.x() - m_maxStartPosOffset.x(), m_pos.y() - m_maxStartPosOffset.y(), m_pos.z() - m_maxStartPosOffset.z(), 1.0 };
         sycl::vec<float, 4> posMax{ m_pos.x() + m_maxStartPosOffset.x(), m_pos.y() + m_maxStartPosOffset.y(), m_pos.z() + m_maxStartPosOffset.z(), 1.0 };
@@ -45,7 +45,7 @@ public:
         , m_radY((float)radY)
     { }
 
-    void generate(double dt, Particle_system &p, size_t startId, size_t endId)
+    void generate(Particle_system &p, size_t startId, size_t endId)
     {
         for (size_t i = startId; i < endId; ++i)
         {
@@ -63,9 +63,9 @@ public:
     sycl::vec<float, 4> m_minEndCol{ 0.0 };
     sycl::vec<float, 4> m_maxEndCol{ 0.0 };
 public:
-    BasicColorGen() : m_minStartCol(20.0), m_maxStartCol(100.0), m_minEndCol(100.0), m_maxEndCol(255.0) { }
+    BasicColorGen() : m_minStartCol(50.0), m_maxStartCol(150.0), m_minEndCol(100.0), m_maxEndCol(255.0) { }
 
-    void generate(double dt, Particle_system &p, size_t startId, size_t endId)
+    void generate(Particle_system &p, size_t startId, size_t endId)
     {
         for (size_t i = startId; i < endId; ++i)
         {
@@ -80,9 +80,9 @@ public:
     sycl::vec<float, 4> m_minStartVel{ 0.0 };
     sycl::vec<float, 4> m_maxStartVel{ 0.0 };
 public:
-    BasicVelGen() { }
+    BasicVelGen(): m_minStartVel(10), m_maxStartVel(20) { }
 
-    void generate(double dt, Particle_system &p, size_t startId, size_t endId)
+    void generate(Particle_system &p, size_t startId, size_t endId)
     {
         for (size_t i = startId; i < endId; ++i)
         {
@@ -99,7 +99,7 @@ public:
 public:
     SphereVelGen() { }
 
-    void generate(double dt, Particle_system &p, size_t startId, size_t endId)
+    void generate(Particle_system &p, size_t startId, size_t endId)
     {
         float phi, theta, v, r;
         for (size_t i = startId; i < endId; ++i)
@@ -120,19 +120,19 @@ public:
 class BasicTimeGen 
 {
 public:
-    float m_minTime{ 0.0 };
-    float m_maxTime{ 0.0 };
+float m_minTime;
+float m_maxTime;
 public:
-    BasicTimeGen() { }
+    BasicTimeGen(): m_minTime(10.0f), m_maxTime(20.0f) { }
 
-    void generate(double dt, Particle_system &p, size_t startId, size_t endId)
+    void generate(Particle_system &p, size_t startId, size_t endId)
     {
         for (size_t i = startId; i < endId; ++i)
         {
-            // p.m_particle[i].time.x() = p.m_particle[i].time.y() = Random::get(m_minTime, m_maxTime);
-            // p.m_particle[i].time.z() = (float)0.0;
-            // p.m_particle[i].time.w() = (float)1.0 / p.m_particle[i].time.x();
-            p.m_particle[i].time = sycl::vec<float, 4>(Random::get(m_minTime, m_maxTime), Random::get(m_minTime, m_maxTime), (float)0.0, (float)1.0 / p.m_particle[i].time.x());
+            p.m_particle[i].time.x() = p.m_particle[i].time.y() = Random::get(m_minTime, m_maxTime);
+            p.m_particle[i].time.z() = (float)0.0;
+            p.m_particle[i].time.w() = (float)1.0 / p.m_particle[i].time.x();
+            // p.m_particle[i].time = sycl::vec<float, 4>(Random::get(m_minTime, m_maxTime), Random::get(m_minTime, m_maxTime), 0.0f, 1.0f / p.m_particle[i].time.x());
             
         }
     }

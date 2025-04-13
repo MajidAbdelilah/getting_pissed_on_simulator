@@ -1,7 +1,10 @@
 #pragma once
 #include <sycl/sycl.hpp>
 #include "vector_gpu.hpp"
+#include "random.hpp"
 
+using Random = effolkronium::random_static;
+sycl::vec<float, 4> random_vec(sycl::vec<float, 4> min, sycl::vec<float, 4> max);
 class Particle
 {
 public:
@@ -53,50 +56,67 @@ public:
 template<>
 struct sycl::is_device_copyable<Particle> : std::true_type {};
 
+template<typename T>
+void swap(T &a, T &b)
+{
+    T temp = a;
+    a = b;
+    b = temp;
+}
 
 class Particle_system
 {
 public:
-    Particle_system(size_t p_count): m_countAlive(0), q(sycl::gpu_selector_v), buf(m_particle.data(), sycl::range<1>(p_count)){
+    Particle_system(size_t p_count):  q(sycl::cpu_selector_v), m_countAlive(0){
         m_particle.resize(p_count);
         // buf = sycl::buffer<Particle, 1>(m_particle.data(), sycl::range<1>(p_count));
     }
     
-    void kill(std::vector<size_t> k)
+    void kill(std::vector<size_t> &k)
     {
         if(m_countAlive == 0) return;
         if(k.size() == 0) return;
-        if(k.size() > m_countAlive) throw std::runtime_error("k size is greater than m_countAlive");
+        if(k.size() > m_countAlive) throw std::runtime_error("k size is greater than m_countAlive " + std::to_string(k.size()) + ", " + std::to_string(m_countAlive));
         // Create SYCL buffer from the vector data
         // sycl::buffer<Particle, 1> buf(m_particle.data(), sycl::range<1>(m_particle.size()));
-        sycl::buffer<size_t, 1> k_buf(k.data(), sycl::range<1>(k.size()));
-        size_t k_size = k.size();
+        sycl::buffer<Particle, 1> buf(m_particle);
+        sycl::buffer<size_t, 1> k_buf(k);
+        // size_t k_size = k.size();
         size_t count_alive = m_countAlive;
         
         q.submit([&](sycl::handler &h){
             auto buf_acc = buf.template get_access<sycl::access::mode::read_write>(h);
             auto k_acc = k_buf.template get_access<sycl::access::mode::read>(h);
-            h.parallel_for(sycl::range<1>(k.size()), [=](size_t idx){
+            h.parallel_for(sycl::range<1>(k.size()), [=](sycl::id<1> idx_d){
+                size_t idx = idx_d.get(0);
                 size_t index = k_acc[idx];
                 buf_acc[index].alive = false;
-                Particle tmp = buf_acc[(count_alive - ((k_size - idx) - 1)) - 1];
-                buf_acc[(count_alive - ((k_size - idx) - 1)) - 1] = buf_acc[index];
-                buf_acc[index] = tmp;
-            });
-        });
-        
-        q.wait();
+                // float m_minTime = 10.1f;
+                float m_maxTime = 20.0f;
+                buf_acc[index].time.x() = buf_acc[index].time.y() = m_maxTime;
+                buf_acc[index].time.z() = (float)0.0;
+                buf_acc[index].time.w() = (float)1.0 / buf_acc[index].time.x();
+                swap(buf_acc[index], buf_acc[(count_alive - idx) - 1]);
 
-        m_countAlive -= k.size();
+                // Particle tmp = buf_acc[(count_alive - idx) - 1];
+                // buf_acc[(count_alive - idx) - 1] = buf_acc[index];
+                // buf_acc[index] = tmp;
+            });
+        }).wait();
+        // std::cout << "her 1\n";
+        q.wait();
+        // std::cout << "her 2\n";
+
+        this->m_countAlive -= k.size();
         
-        k.clear();
     }
 
-    void wake(std::vector<size_t> w)
+    void wake(std::vector<size_t> &w)
     {
         if((m_countAlive + w.size()) > m_particle.size()) return;
         // sycl::buffer<Particle, 1> buf(m_particle.data(), sycl::range<1>(m_particle.size()));
         sycl::buffer<size_t, 1> w_buf(w.data(), sycl::range<1>(w.size()));
+        sycl::buffer<Particle, 1> buf(m_particle.data(), sycl::range<1>(m_particle.size()));
         size_t w_size = w.size();
         
         size_t erased = 0;
@@ -105,46 +125,53 @@ public:
             if(w[idx] >= m_countAlive && w[idx] < (m_countAlive + w_size))
             {
                 // Swap the elements
-                Particle tmp = m_particle[m_countAlive];
-                m_particle[m_countAlive] = m_particle[w[idx]];
-                m_particle[w[idx]] = tmp;
-                m_particle[m_countAlive].alive = true;
+                m_particle[w[idx]].alive = true;
+                swap(m_particle[m_countAlive], m_particle[w[idx]]);
                 m_countAlive++;
-                size_t size_tmp = w[(w.size() - erased)- 1]; // swap
-                w[(w.size() - erased)- 1] = w[idx];
-                w[idx] = size_tmp;
+                // Particle tmp = m_particle[m_countAlive];
+                // m_particle[m_countAlive] = m_particle[w[idx]];
+                // m_particle[w[idx]] = tmp;
+                // m_particle[m_countAlive].alive = true;
+                // m_particle[w[idx]].alive = false;
+                
+                // size_t size_tmp = w[(w.size() - erased)- 1]; // swap
+                // w[(w.size() - erased)- 1] = w[idx];
+                // w[idx] = size_tmp;
+                // erased++;
+                // idx--;
+                w[idx] = SIZE_MAX; // mark as erased
                 erased++;
-                idx--;
             }
         }
+        std::sort(w.begin(), w.end());
+        
 
-        w.resize(w.size() - erased);
-        if(w.size() == 0) return;
+        // w.resize(w.size() - erased);
+        // if(w.size() == 0) return;
 
-        w_size = w.size();
+        // w_size = w.size();
         size_t count_alive = m_countAlive;
         q.submit([&](sycl::handler &h){
             auto buf_acc = buf.template get_access<sycl::access::mode::read_write>(h);
             auto w_acc = w_buf.template get_access<sycl::access::mode::read>(h);
-            h.parallel_for(sycl::range<1>(w.size()), [=](size_t idx){
+            h.parallel_for(sycl::range<1>(w.size() - erased), [=](sycl::id<1> idx_d){
+                size_t idx = idx_d.get(0);
                 size_t index = w_acc[idx];
+                if(index == SIZE_MAX) return;
                 buf_acc[index].alive = true;
-                Particle tmp = buf_acc[count_alive + idx];
-                buf_acc[count_alive + idx] = buf_acc[index];
-                buf_acc[index] = tmp;
+                swap(buf_acc[index], buf_acc[count_alive + idx]);
             });
-        });
+        }).wait();
 
         q.wait();
         // Update the count of alive particles
-        m_countAlive += w.size();
+        m_countAlive += w.size() - erased;
 
-        w.clear();
     }
 
     Lp_parallel_vector_GPU<Particle> m_particle;
     sycl::queue q;
-    sycl::buffer<Particle, 1> buf;
+    // sycl::buffer<Particle, 1> buf;
     size_t m_countAlive{ 0 };
 };
 

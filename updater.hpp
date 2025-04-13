@@ -21,47 +21,155 @@ class EulerUpdater : public ParticleUpdater
 {
 public:
     sycl::vec<float, 4> m_globalAcceleration;
-    float m_floorY{ 0.0f };
-	float m_bounceFactor{ 3.5f };
+    float m_floorY{ -1.0f };
+	float m_bounceFactor{ 2.5f };
+    std::vector<sycl::vec<float, 4>> m_attractors; // .w is force
+    sycl::queue q;
 public:
-    EulerUpdater() {  }
+    size_t collectionSize() const { return m_attractors.size(); }
+	void add(const sycl::vec<float, 4> &attr) { m_attractors.push_back(attr); }
+	sycl::vec<float, 4> &get(size_t id) { return m_attractors[id]; }
+public:
+    EulerUpdater(): q(sycl::cpu_selector_v) { 
+        m_attractors.push_back({15, 4, -3, 10}); 
+        m_attractors.push_back({-1, 20, 13, 10});
+        m_attractors.push_back({-10, 0, 0, 10});
+    }
     virtual void update(double dt, Particle_system &p) override
     {
-        m_globalAcceleration = random_vec(sycl::vec<float, 4>(-100.0f), sycl::vec<float, 4>(100.0f));
+        m_globalAcceleration = random_vec(sycl::vec<float, 4>(-50.0f), sycl::vec<float, 4>(50.0f));
         const sycl::vec<float, 4> globalA{ dt * m_globalAcceleration.x(), 
                                  dt * m_globalAcceleration.y(), 
                                  dt * m_globalAcceleration.z(), 
                                  0.0 };
         const float localDT = (float)dt;
     
-        const unsigned int endId = p.m_countAlive;
-        for (size_t i = 0; i < endId; ++i)
-            p.m_particle[i].acc += globalA;
+         unsigned int endId = p.m_countAlive;
+        
+        // const size_t countAttractors = m_attractors.size();
+        
+        std::vector<size_t> to_kill;
+        // to_kill.resize(endId);
+        sycl::buffer<Particle, 1> buf(p.m_particle);
+        sycl::buffer<sycl::vec<float, 4>> m_attractors_buf(m_attractors);
+        // size_t buf_size = p.m_particle.size();
+        float m_floorY = this->m_floorY;
+        float m_bounceFactor = this->m_bounceFactor;
+        q.submit([&](sycl::handler &h){
+            sycl::accessor buf_acc = buf.template get_access<sycl::access_mode::read_write>(h);
+            // sycl::accessor m_attractors_acc = m_attractors_buf.template get_access<sycl::access_mode::read>(h);
+            h.parallel_for(sycl::range<1>(endId), [=](sycl::id<1> idx_d){
+                size_t idx = idx_d.get(0);
+                if(buf_acc[idx].alive == false)
+                {
+                    return ;
+                }
+                buf_acc[idx].acc += globalA;
     
-        for (size_t i = 0; i < endId; ++i)
-            p.m_particle[i].vel += localDT * p.m_particle[i].acc;
+                buf_acc[idx].vel += localDT * buf_acc[idx].acc;
+        
+                buf_acc[idx].pos += localDT * buf_acc[idx].vel;
     
-        for (size_t i = 0; i < endId; ++i)
-            p.m_particle[i].pos += localDT * p.m_particle[i].vel;
-            
+                if (buf_acc[idx].pos.y() > m_floorY)
+                {
+                    sycl::vec<float, 4> force = buf_acc[idx].acc;
+                    
+                    float normalFactor = sycl::dot(force, sycl::vec<float, 4>(0.0f, 1.0f, 0.0f, 0.0f));
+                    if (normalFactor < 0.0f)
+                        force -= sycl::vec<float, 4>(0.0f, 1.0f, 0.0f, 0.0f) * normalFactor;
+    
+                    float velFactor = sycl::dot(buf_acc[idx].vel, sycl::vec<float, 4>(0.0f, 1.0f, 0.0f, 0.0f));
+                    //if (velFactor < 0.0)
+                    buf_acc[idx].vel -= sycl::vec<float, 4>(0.0f, 1.0f, 0.0f, 0.0f) * (1.0f + m_bounceFactor) * velFactor;
+    
+                    buf_acc[idx].acc = force;
+                }
+                // sycl::vec<float, 4> off;
+                // float dist;
+                // size_t a = 0;    
+                // for (a = 0; a < countAttractors; ++a)
+                // {
+                //     off.x() = m_attractors_acc[a].x() - buf_acc[idx].pos.x();
+                //     off.y() = m_attractors_acc[a].y() - buf_acc[idx].pos.y();
+                //     off.z() = m_attractors_acc[a].z() - buf_acc[idx].pos.z();
+                //     dist = sycl::dot(off, off);
+    
+                //     //if (fabs(dist) > 0.00001)
+                //     dist = m_attractors_acc[a].w() / dist;
+    
+                //     buf_acc[idx].acc += off * dist;
+                // }
+    
+                buf_acc[idx].time.x() -= localDT;
+                // interpolation: from 0 (start of life) till 1 (end of life)
+                buf_acc[idx].time.z() = (float)1.0 - (buf_acc[idx].time.x()*buf_acc[idx].time.w()); // .w is 1.0/max life time		
+                
+                buf_acc[idx].col = sycl::mix(buf_acc[idx].startCol, buf_acc[idx].endCol, sycl::vec<float, 4>(buf_acc[idx].time.z()));
+            });
+        }).wait();
+
+        q.wait();
+        
+        // size_t kill_count = 0;
 
         for (size_t i = 0; i < endId; ++i)
         {
-            if (p.m_particle[i].pos.y() < m_floorY)
-            {
-                sycl::vec<float, 4> force = p.m_particle[i].acc;
+            // p.m_particle[i].acc += globalA;
+    
+            // p.m_particle[i].vel += localDT * p.m_particle[i].acc;
+    
+            // p.m_particle[i].pos += localDT * p.m_particle[i].vel;
+
+            // if (p.m_particle[i].pos.y() > m_floorY)
+            // {
+            //     sycl::vec<float, 4> force = p.m_particle[i].acc;
                 
-                float normalFactor = sycl::dot(force, sycl::vec<float, 4>(0.0f, 1.0f, 0.0f, 0.0f));
-                if (normalFactor < 0.0f)
-                    force -= sycl::vec<float, 4>(0.0f, 1.0f, 0.0f, 0.0f) * normalFactor;
+            //     float normalFactor = sycl::dot(force, sycl::vec<float, 4>(0.0f, 1.0f, 0.0f, 0.0f));
+            //     if (normalFactor < 0.0f)
+            //         force -= sycl::vec<float, 4>(0.0f, 1.0f, 0.0f, 0.0f) * normalFactor;
 
-                float velFactor = sycl::dot(p.m_particle[i].vel, sycl::vec<float, 4>(0.0f, 1.0f, 0.0f, 0.0f));
-                //if (velFactor < 0.0)
-                p.m_particle[i].vel -= sycl::vec<float, 4>(0.0f, 1.0f, 0.0f, 0.0f) * (1.0f + m_bounceFactor) * velFactor;
+            //     float velFactor = sycl::dot(p.m_particle[i].vel, sycl::vec<float, 4>(0.0f, 1.0f, 0.0f, 0.0f));
+            //     //if (velFactor < 0.0)
+            //     p.m_particle[i].vel -= sycl::vec<float, 4>(0.0f, 1.0f, 0.0f, 0.0f) * (1.0f + m_bounceFactor) * velFactor;
 
-                p.m_particle[i].acc = force;
+            //     p.m_particle[i].acc = force;
+            // }
+        
+            // for (a = 0; a < countAttractors; ++a)
+            // {
+            //     off.x() = m_attractors[a].x() - p.m_particle[i].pos.x();
+            //     off.y() = m_attractors[a].y() - p.m_particle[i].pos.y();
+            //     off.z() = m_attractors[a].z() - p.m_particle[i].pos.z();
+            //     dist = sycl::dot(off, off);
+
+            //     //if (fabs(dist) > 0.00001)
+            //     dist = m_attractors[a].w() / dist;
+
+            //     p.m_particle[i].acc += off * dist;
+            // }
+
+            // p.m_particle[i].col = sycl::mix(p.m_particle[i].startCol, p.m_particle[i].endCol, sycl::vec<float, 4>(p.m_particle[i].time.z()));
+        
+            // p.m_particle[i].time.x() -= localDT;
+            // // interpolation: from 0 (start of life) till 1 (end of life)
+            // p.m_particle[i].time.z() = (float)1.0 - (p.m_particle[i].time.x()*p.m_particle[i].time.w()); // .w is 1.0/max life time		
+            
+           
+            // std::cout << "time.x(): "<< p.m_particle[i].time.x()  << ", localDt: " << localDT << "\n";
+            if (p.m_particle[i].time.x() < 0.0f)
+            {
+            // std::cout << "kill, time.x(): "<< p.m_particle[i].time.x()  << ", localDt: " << localDT << "\n";
+
+                // kill_count++;
+                to_kill.push_back(i);
+				// endId = p.m_countAlive < p.m_particle.size() ? p.m_countAlive : p.m_particle.size();
+                // p.m_particle[i].time = sycl::vec<float, 4>(20, 20, (float)0.0, (float)1.0 / p.m_particle[i].time.x());
+
             }
         }
+        // std::cout << "to_kill.size(): " << to_kill.size() << "\n";
+        // to_kill.resize(kill_count);
+        p.kill(to_kill);
 
     }
 };
@@ -79,26 +187,7 @@ public:
 // {
 // const float localDT = (float)dt;
 
-// const size_t endId = p->m_countAlive;
-// const size_t countAttractors = m_attractors.size();
-// glm::vec4 off;
-// float dist;
-// size_t a;
-// for (size_t i = 0; i < endId; ++i)
-// {
-//     for (a = 0; a < countAttractors; ++a)
-//     {
-//         off.x = m_attractors[a].x - p->m_pos[i].x;
-//         off.y = m_attractors[a].y - p->m_pos[i].y;
-//         off.z = m_attractors[a].z - p->m_pos[i].z;
-//         dist = glm::dot(off, off);
 
-//         //if (fabs(dist) > 0.00001)
-//         dist = m_attractors[a].w / dist;
-
-//         p->m_acc[i] += off * dist;
-//     }
-// }
 // }
 
 // void BasicColorUpdater::update(double dt, ParticleData *p)
@@ -153,16 +242,5 @@ public:
 
 // if (endId == 0) return;
 
-// for (size_t i = 0; i < endId; ++i)
-// {
-//     p->m_time[i].x -= localDT;
-//     // interpolation: from 0 (start of life) till 1 (end of life)
-//     p->m_time[i].z = (float)1.0 - (p->m_time[i].x*p->m_time[i].w); // .w is 1.0/max life time		
 
-//     if (p->m_time[i].x < (float)0.0)
-//     {
-//         p->kill(i);
-//         endId = p->m_countAlive < p->m_count ? p->m_countAlive : p->m_count;
-//     }
-// }
 // }
