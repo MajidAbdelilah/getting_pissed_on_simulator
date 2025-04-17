@@ -1,13 +1,17 @@
 #pragma once
 #include <sycl/sycl.hpp>
 #include "particle.hpp"
-#include "random.hpp"
+// #include "random.hpp"
+#include "my_random.hpp"
 
-using Random = effolkronium::random_static;
+// using Random = effolkronium::random_static;
+
+
+
 
 sycl::vec<float, 4> random_vec(sycl::vec<float, 4> min, sycl::vec<float, 4> max)
 {
-    return {Random::get(min.x(), max.x()), Random::get(min.y(), max.y()), Random::get(min.z(), max.z()), Random::get(min.w(), max.w())};
+    return {random_rangef(min.x(), max.x(), ), random_rangef(min.y(), max.y(), ), random_rangef(min.z(), max.z(), ), random_rangef(min.w(), max.w(), )};
 }
 
 
@@ -45,6 +49,7 @@ public:
         auto threadWork = [&](size_t threadId) {
             // Start at threadId and increment by numThreads
             for (size_t i = startId + threadId; i < endId; i += numThreads) {
+            
             p.m_particle[i].pos = random_vec(posMin, posMax);
             p.m_particle[i].startCol = random_vec(m_minStartCol, m_maxStartCol);
             p.m_particle[i].endCol = random_vec(m_minEndCol, m_maxEndCol);

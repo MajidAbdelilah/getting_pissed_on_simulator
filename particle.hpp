@@ -86,8 +86,8 @@ public:
         size_t count_alive = m_countAlive;
         
         q.submit([&](sycl::handler &h){
-            auto buf_acc = buf.template get_access<sycl::access::mode::read_write>(h);
-            auto k_acc = k_buf.template get_access<sycl::access::mode::read>(h);
+            auto buf_acc = buf.get_access<sycl::access::mode::read_write>(h);
+            auto k_acc = k_buf.get_access<sycl::access::mode::read>(h);
             h.parallel_for(sycl::range<1>(k.size()), [=](sycl::id<1> idx_d){
                 size_t idx = idx_d.get(0);
                 size_t index = k_acc[idx];
@@ -116,8 +116,8 @@ public:
     {
         if((m_countAlive + w.size()) > m_particle.size()) return;
         // sycl::buffer<Particle, 1> buf(m_particle.data(), sycl::range<1>(m_particle.size()));
-        sycl::buffer<size_t, 1> w_buf(w.data(), sycl::range<1>(w.size()));
-        sycl::buffer<Particle, 1> buf(m_particle.data(), sycl::range<1>(m_particle.size()));
+        sycl::buffer<size_t, 1> w_buf(w);
+        sycl::buffer<Particle, 1> buf(m_particle);
         // size_t w_size = w.size();
         
         size_t erased = 0;

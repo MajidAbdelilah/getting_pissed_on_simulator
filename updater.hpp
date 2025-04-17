@@ -37,6 +37,7 @@ public:
     }
     virtual void update(double dt, Particle_system &p) override
     {
+        if(p.m_countAlive == 0) return;
         m_globalAcceleration = random_vec(sycl::vec<float, 4>(-50.0f), sycl::vec<float, 4>(50.0f));
         const sycl::vec<float, 4> globalA{ dt * m_globalAcceleration.x(), 
                                  dt * m_globalAcceleration.y(), 
