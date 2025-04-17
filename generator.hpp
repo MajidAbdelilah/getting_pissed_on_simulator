@@ -9,9 +9,9 @@
 
 
 
-sycl::vec<float, 4> random_vec(sycl::vec<float, 4> min, sycl::vec<float, 4> max)
+sycl::vec<float, 4> random_vec(sycl::vec<float, 4> min, sycl::vec<float, 4> max, unsigned int time)
 {
-    return {random_rangef(min.x(), max.x(), ), random_rangef(min.y(), max.y(), ), random_rangef(min.z(), max.z(), ), random_rangef(min.w(), max.w(), )};
+    return random_rangef(min, max, time);
 }
 
 
@@ -44,17 +44,19 @@ public:
         
         std::vector<std::thread> threads;
         threads.reserve(numThreads);
+        unsigned int current_time = time(0);
 
         // Lambda function for thread work with strided access pattern
         auto threadWork = [&](size_t threadId) {
             // Start at threadId and increment by numThreads
+            std::cout << "thread id = " << threadId << "\n";
             for (size_t i = startId + threadId; i < endId; i += numThreads) {
             
-            p.m_particle[i].pos = random_vec(posMin, posMax);
-            p.m_particle[i].startCol = random_vec(m_minStartCol, m_maxStartCol);
-            p.m_particle[i].endCol = random_vec(m_minEndCol, m_maxEndCol);
-            p.m_particle[i].vel = random_vec(m_minStartVel, m_maxStartVel);
-            p.m_particle[i].time.x() = p.m_particle[i].time.y() = Random::get(m_minTime, m_maxTime);
+            p.m_particle[i].pos = random_vec(posMin, posMax, current_time + i * 1000);
+            p.m_particle[i].startCol = random_vec(m_minStartCol, m_maxStartCol, current_time + i * 1000);
+            p.m_particle[i].endCol = random_vec(m_minEndCol, m_maxEndCol, current_time + i * 1000);
+            p.m_particle[i].vel = random_vec(m_minStartVel, m_maxStartVel, current_time + i * 1000);
+            p.m_particle[i].time.x() = p.m_particle[i].time.y() = random_rangef(m_minTime, m_maxTime, current_time + i * 1000);
             p.m_particle[i].time.z() = (float)0.0;
             p.m_particle[i].time.w() = (float)1.0 / p.m_particle[i].time.x();
             }
@@ -77,7 +79,7 @@ public:
         //     p.m_particle[i].startCol = random_vec(m_minStartCol, m_maxStartCol);
         //     p.m_particle[i].endCol = random_vec(m_minEndCol, m_maxEndCol);
         //     p.m_particle[i].vel = random_vec(m_minStartVel, m_maxStartVel);
-        //     p.m_particle[i].time.x() = p.m_particle[i].time.y() = Random::get(m_minTime, m_maxTime);
+        //     p.m_particle[i].time.x() = p.m_particle[i].time.y() = my_randf(m_minTime, m_maxTime);
         //     p.m_particle[i].time.z() = (float)0.0;
         //     p.m_particle[i].time.w() = (float)1.0 / p.m_particle[i].time.x();
         // }
@@ -102,7 +104,7 @@ public:
 //     {
 //         for (size_t i = startId; i < endId; ++i)
 //         {
-//             double ang = Random::get(0.0, M_PI*2.0);
+//             double ang = my_randf(0.0, M_PI*2.0);
 //             p.m_particle[i].pos = m_center + sycl::vec<float, 4>(m_radX*sin(ang), m_radY*cos(ang), 0.0, 1.0);
 //         }
 //     }
@@ -148,9 +150,9 @@ public:
 //         float phi, theta, v, r;
 //         for (size_t i = startId; i < endId; ++i)
 //         {
-//             phi = Random::get(-M_PI, M_PI);
-//             theta = Random::get(-M_PI, M_PI);
-//             v = Random::get(m_minVel, m_maxVel);
+//             phi = my_randf(-M_PI, M_PI);
+//             theta = my_randf(-M_PI, M_PI);
+//             v = my_randf(m_minVel, m_maxVel);
 
 //             r = v*sinf(phi);
 //             // p.m_particle[i].vel.z() = v*cosf(phi);
@@ -172,7 +174,7 @@ public:
 //         for (size_t i = startId; i < endId; ++i)
 //         {
            
-//             // p.m_particle[i].time = sycl::vec<float, 4>(Random::get(m_minTime, m_maxTime), Random::get(m_minTime, m_maxTime), 0.0f, 1.0f / p.m_particle[i].time.x());
+//             // p.m_particle[i].time = sycl::vec<float, 4>(my_randf(m_minTime, m_maxTime), my_randf(m_minTime, m_maxTime), 0.0f, 1.0f / p.m_particle[i].time.x());
             
 //         }
 //     }

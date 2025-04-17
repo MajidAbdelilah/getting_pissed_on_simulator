@@ -20,12 +20,12 @@ class fill_with_index
 
 void emit(double dt, Particle_system &p, size_t m_emitRate)
 {
-    if (p.m_countAlive >= p.m_particle.size()) return; // No more particles to emit
+    if (p.m_countAlive >= p.size) return; // No more particles to emit
     if (m_emitRate <= 0) return;              // No emission rate
 
     const size_t maxNewParticles = static_cast<size_t>(dt*m_emitRate);
     const size_t startId = p.m_countAlive;
-    const size_t endId = std::min(startId + maxNewParticles, p.m_particle.size() -1);
+    const size_t endId = std::min(startId + maxNewParticles, p.size -1);
     if((endId - startId) <= 0) return; 
     // std::cout << "startId: " << startId << ", endId: " << endId << "\n";
     Lp_parallel_vector<size_t> w;
@@ -59,7 +59,7 @@ void emit(double dt, Particle_system &p, size_t m_emitRate)
 }
 
 void draw(Image &im, Texture2D &tex, size_t width, size_t hieght, Particle_system &p, sycl::queue &q)
-{
+{ 
     (void)p;
     sycl::buffer<Color, 1> buf(((Color*)im.data), sycl::range<1>(im.width*im.height));
     q.submit([&](sycl::handler &h){
@@ -69,11 +69,12 @@ void draw(Image &im, Texture2D &tex, size_t width, size_t hieght, Particle_syste
             acc[idx] = BLACK;
         });
     }).wait();
+    q.wait();
 
-    sycl::buffer<Particle, 1> buf_p(p.m_particle);
+    // sycl::buffer<Particle, 1> buf_p(p.m_particle);
     
     q.submit([&](sycl::handler &h){
-        auto acc = buf_p.get_access<sycl::access::mode::read>(h);
+        auto acc = p.m_particle;
         auto acc_im = buf.get_access<sycl::access::mode::write>(h);
         h.parallel_for(sycl::range<1>(p.m_countAlive), [=](sycl::id<1> idx_d){
             size_t idx = idx_d.get(0);
@@ -91,6 +92,8 @@ void draw(Image &im, Texture2D &tex, size_t width, size_t hieght, Particle_syste
             }
         });
     }).wait();
+    q.wait();
+    
 
     // for(size_t i = 0; i < p.m_countAlive; ++i)
     // {

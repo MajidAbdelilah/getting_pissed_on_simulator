@@ -68,8 +68,8 @@ class Particle_system
 {
 public:
     Particle_system(size_t p_count):  q(sycl::cpu_selector_v), m_countAlive(0){
-        m_particle.resize(p_count);
-        // buf = sycl::buffer<Particle, 1>(m_particle.data(), sycl::range<1>(p_count));
+        m_particle = sycl::malloc_shared<Particle>(p_count, q);
+        size = p_count;
     }
     
     void kill(std::vector<size_t> &k, size_t kill_count)
@@ -79,14 +79,14 @@ public:
         if(kill_count > m_countAlive) throw std::runtime_error("k size is greater than m_countAlive " + std::to_string(kill_count) + ", " + std::to_string(m_countAlive));
         // Create SYCL buffer from the vector data
         // sycl::buffer<Particle, 1> buf(m_particle.data(), sycl::range<1>(m_particle.size()));
-        sycl::buffer<Particle, 1> buf(m_particle);
+        // sycl::buffer<Particle, 1> buf(m_particle);
         sycl::buffer<size_t, 1> k_buf(k);
         
         // size_t k_size = k.size();
         size_t count_alive = m_countAlive;
         
         q.submit([&](sycl::handler &h){
-            auto buf_acc = buf.get_access<sycl::access::mode::read_write>(h);
+            auto buf_acc = m_particle;
             auto k_acc = k_buf.get_access<sycl::access::mode::read>(h);
             h.parallel_for(sycl::range<1>(k.size()), [=](sycl::id<1> idx_d){
                 size_t idx = idx_d.get(0);
@@ -114,10 +114,10 @@ public:
 
     void wake(std::vector<size_t> &w)
     {
-        if((m_countAlive + w.size()) > m_particle.size()) return;
+        if((m_countAlive + w.size()) > size) return;
         // sycl::buffer<Particle, 1> buf(m_particle.data(), sycl::range<1>(m_particle.size()));
         sycl::buffer<size_t, 1> w_buf(w);
-        sycl::buffer<Particle, 1> buf(m_particle);
+        // sycl::buffer<Particle, 1> buf(m_particle);
         // size_t w_size = w.size();
         
         size_t erased = 0;
@@ -154,7 +154,7 @@ public:
         // w_size = w.size();
         size_t count_alive = m_countAlive;
         q.submit([&](sycl::handler &h){
-            auto buf_acc = buf.template get_access<sycl::access::mode::read_write>(h);
+            auto buf_acc = m_particle;
             auto w_acc = w_buf.template get_access<sycl::access::mode::read>(h);
             // std::cout << "loop_size: " << w.size() - erased << ", " << w.size() << ", " << erased << "\n";
             h.parallel_for(sycl::range<1>(w.size() - erased), [=](sycl::id<1> idx_d){
@@ -172,7 +172,8 @@ public:
 
     }
 
-    std::vector<Particle> m_particle;
+    Particle *m_particle;
+    size_t size;
     sycl::queue q;
     // sycl::buffer<Particle, 1> buf;
     size_t m_countAlive{ 0 };

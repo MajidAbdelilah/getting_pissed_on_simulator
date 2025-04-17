@@ -2,11 +2,7 @@
 #include "particle.hpp"
 #include <sycl/sycl.hpp>
 
-#include "random.hpp"
-
-using Random = effolkronium::random_static;
-
-sycl::vec<float, 4> random_vec(sycl::vec<float, 4> min, sycl::vec<float, 4> max);
+sycl::vec<float, 4> random_vec(sycl::vec<float, 4> min, sycl::vec<float, 4> max, unsigned int time);
 
 class ParticleUpdater
 {
@@ -38,7 +34,8 @@ public:
     virtual void update(double dt, Particle_system &p) override
     {
         if(p.m_countAlive == 0) return;
-        m_globalAcceleration = random_vec(sycl::vec<float, 4>(-50.0f), sycl::vec<float, 4>(50.0f));
+        unsigned int current_time = time(0);
+        m_globalAcceleration = random_vec(sycl::vec<float, 4>(-50.0f), sycl::vec<float, 4>(50.0f), current_time);
         const sycl::vec<float, 4> globalA{ dt * m_globalAcceleration.x(), 
                                  dt * m_globalAcceleration.y(), 
                                  dt * m_globalAcceleration.z(), 
@@ -51,13 +48,13 @@ public:
         
         std::vector<size_t> to_kill;
         to_kill.reserve(endId); // Reserve space for to_kill
-        sycl::buffer<Particle, 1> buf(p.m_particle);
+        // sycl::buffer<Particle, 1> buf(p.m_particle);
         sycl::buffer<sycl::vec<float, 4>> m_attractors_buf(m_attractors);
         // size_t buf_size = p.m_particle.size();
         float m_floorY = this->m_floorY;
         float m_bounceFactor = this->m_bounceFactor;
         q.submit([&](sycl::handler &h){
-            sycl::accessor buf_acc = buf.template get_access<sycl::access::mode::read_write>(h);
+            auto buf_acc = p.m_particle;
             h.parallel_for(sycl::range<1>(endId), [=](sycl::id<1> idx_d){
                 size_t idx = idx_d.get(0);
                 // if(buf_acc[idx].alive == false)
