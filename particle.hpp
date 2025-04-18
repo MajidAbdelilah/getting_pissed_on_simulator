@@ -71,6 +71,10 @@ public:
         m_particle = sycl::malloc_shared<Particle>(p_count, q);
         size = p_count;
     }
+
+    ~Particle_system() {
+        sycl::free(m_particle, q);
+    }
     
     void kill(std::vector<size_t> &k, size_t kill_count)
     {
@@ -84,7 +88,7 @@ public:
         
         // size_t k_size = k.size();
         size_t count_alive = m_countAlive;
-        
+        size_t thread_count = q.get_device().get_info<sycl::info::device::max_compute_units>() * 128;
         q.submit([&](sycl::handler &h){
             auto buf_acc = m_particle;
             auto k_acc = k_buf.get_access<sycl::access::mode::read>(h);
@@ -93,10 +97,10 @@ public:
                 size_t index = k_acc[idx];
                 if(index == SIZE_MAX) return;
                 buf_acc[index].alive = false;
-                float m_maxTime = 20.0f;
-                buf_acc[index].time.x() = buf_acc[index].time.y() = m_maxTime;
-                buf_acc[index].time.z() = (float)0.0;
-                buf_acc[index].time.w() = (float)1.0 / buf_acc[index].time.x();
+                // float m_maxTime = 20.0f;
+                // buf_acc[index].time.x() = buf_acc[index].time.y() = m_maxTime;
+                // buf_acc[index].time.z() = (float)0.0;
+                // buf_acc[index].time.w() = (float)1.0 / buf_acc[index].time.x();
                 swap(buf_acc[index], buf_acc[(count_alive - idx) - 1]);
 
                 // Particle tmp = buf_acc[(count_alive - idx) - 1];
@@ -114,7 +118,7 @@ public:
 
     void wake(std::vector<size_t> &w)
     {
-        if((m_countAlive + w.size()) > size) return;
+        // if((m_countAlive + w.size()) > size) return;
         // sycl::buffer<Particle, 1> buf(m_particle.data(), sycl::range<1>(m_particle.size()));
         sycl::buffer<size_t, 1> w_buf(w);
         // sycl::buffer<Particle, 1> buf(m_particle);
@@ -160,7 +164,7 @@ public:
             h.parallel_for(sycl::range<1>(w.size() - erased), [=](sycl::id<1> idx_d){
                 size_t idx = idx_d.get(0);
                 size_t index = w_acc[idx];
-                if(index == SIZE_MAX) return;
+                // if(index == SIZE_MAX) return;
                 buf_acc[index].alive = true;
                 swap(buf_acc[index], buf_acc[count_alive + idx]);
             });

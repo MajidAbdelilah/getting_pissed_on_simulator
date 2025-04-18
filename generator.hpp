@@ -30,7 +30,7 @@ public:
     float m_maxTime;
     sycl::queue q;
 public:
-    Gen(): m_pos(-1000.0, -400.0, 0, 0), m_maxStartPosOffset(100.0), m_minStartCol(150.0), m_maxStartCol(170.0), m_minEndCol(230.0), m_maxEndCol(255.0), m_minStartVel(20), m_maxStartVel(50), m_minTime(10.0f), m_maxTime(20.0f), q(sycl::cpu_selector_v) { }
+    Gen(): m_pos(-1000.0, -400.0, 0, 0), m_maxStartPosOffset(100.0), m_minStartCol(150.0), m_maxStartCol(170.0), m_minEndCol(230.0), m_maxEndCol(255.0), m_minStartVel(20), m_maxStartVel(50), m_minTime(10.0f), m_maxTime(15.0f), q(sycl::cpu_selector_v) { }
 
     void generate(Particle_system &p, size_t startId, size_t endId)
     {
@@ -49,7 +49,7 @@ public:
         // Lambda function for thread work with strided access pattern
         auto threadWork = [&](size_t threadId) {
             // Start at threadId and increment by numThreads
-            std::cout << "thread id = " << threadId << "\n";
+            // std::cout << "thread id = " << threadId << "\n";
             for (size_t i = startId + threadId; i < endId; i += numThreads) {
             
             p.m_particle[i].pos = random_vec(posMin, posMax, current_time + i * 1000);
