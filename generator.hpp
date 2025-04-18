@@ -30,7 +30,7 @@ public:
     float m_maxTime;
     sycl::queue q;
 public:
-    Gen(): m_pos(-1000.0, -400.0, 0, 0), m_maxStartPosOffset(100.0), m_minStartCol(150.0), m_maxStartCol(170.0), m_minEndCol(230.0), m_maxEndCol(255.0), m_minStartVel(20), m_maxStartVel(50), m_minTime(10.0f), m_maxTime(15.0f), q(sycl::cpu_selector_v) { }
+    Gen(): m_pos(-1000.0, -400.0, 0, 0), m_maxStartPosOffset(100.0), m_minStartCol(150.0), m_maxStartCol(170.0), m_minEndCol(230.0), m_maxEndCol(255.0), m_minStartVel(20), m_maxStartVel(50), m_minTime(10.0f), m_maxTime(15.0f), q(sycl::gpu_selector_v) { }
 
     void generate(Particle_system &p, size_t startId, size_t endId)
     {
@@ -40,37 +40,53 @@ public:
         // sycl::buffer<Particle, 1> buf(p.m_particle);
         
         // Determine number of threads to use
-        const unsigned int numThreads = std::thread::hardware_concurrency();
+        // const unsigned int numThreads = std::thread::hardware_concurrency();
         
-        std::vector<std::thread> threads;
-        threads.reserve(numThreads);
+        // std::vector<std::thread> threads;
+        // threads.reserve(numThreads);
         unsigned int current_time = time(0);
 
         // Lambda function for thread work with strided access pattern
-        auto threadWork = [&](size_t threadId) {
-            // Start at threadId and increment by numThreads
-            // std::cout << "thread id = " << threadId << "\n";
-            for (size_t i = startId + threadId; i < endId; i += numThreads) {
+        q.submit([&](sycl::handler &h){
+            auto buf_acc = p.m_particle;
+            auto m_minStartCol = this->m_minStartCol;
+            auto m_maxStartCol = this->m_maxStartCol;
+            auto m_minEndCol = this->m_minEndCol;
+            auto m_maxEndCol = this->m_maxEndCol;
+            auto m_minStartVel = this->m_minStartVel;
+            auto m_maxStartVel = this->m_maxStartVel;
+            auto m_minTime = this->m_minTime;
+            auto m_maxTime = this->m_maxTime;
+            h.parallel_for(sycl::range<1>(endId - startId), [=](sycl::id<1> idx_d){
+                size_t idx = idx_d.get(0);
+                size_t i = startId + idx;
+                
+                buf_acc[i].pos = random_vec(posMin, posMax, current_time + i * 1000);
+                buf_acc[i].startCol = random_vec(m_minStartCol, m_maxStartCol, current_time + i * 1000);
+                buf_acc[i].endCol = random_vec(m_minEndCol, m_maxEndCol, current_time + i * 1000);
+                buf_acc[i].vel = random_vec(m_minStartVel, m_maxStartVel, current_time + i * 1000);
+                buf_acc[i].time.x() = buf_acc[i].time.y() = random_rangef(m_minTime, m_maxTime, current_time + i * 1000);
+                buf_acc[i].time.z() = (float)0.0;
+                buf_acc[i].time.w() = (float)1.0 / buf_acc[i].time.x();
+            });
+        }).wait();
+        q.wait();
+        // auto threadWork = [&](size_t threadId) {
+        //     // Start at threadId and increment by numThreads
+        //     // std::cout << "thread id = " << threadId << "\n";
+        //     for (size_t i = startId + threadId; i < endId; i += numThreads) {
             
-            p.m_particle[i].pos = random_vec(posMin, posMax, current_time + i * 1000);
-            p.m_particle[i].startCol = random_vec(m_minStartCol, m_maxStartCol, current_time + i * 1000);
-            p.m_particle[i].endCol = random_vec(m_minEndCol, m_maxEndCol, current_time + i * 1000);
-            p.m_particle[i].vel = random_vec(m_minStartVel, m_maxStartVel, current_time + i * 1000);
-            p.m_particle[i].time.x() = p.m_particle[i].time.y() = random_rangef(m_minTime, m_maxTime, current_time + i * 1000);
-            p.m_particle[i].time.z() = (float)0.0;
-            p.m_particle[i].time.w() = (float)1.0 / p.m_particle[i].time.x();
-            }
-        };
+        //     p.m_particle[i].pos = random_vec(posMin, posMax, current_time + i * 1000);
+        //     p.m_particle[i].startCol = random_vec(m_minStartCol, m_maxStartCol, current_time + i * 1000);
+        //     p.m_particle[i].endCol = random_vec(m_minEndCol, m_maxEndCol, current_time + i * 1000);
+        //     p.m_particle[i].vel = random_vec(m_minStartVel, m_maxStartVel, current_time + i * 1000);
+        //     p.m_particle[i].time.x() = p.m_particle[i].time.y() = random_rangef(m_minTime, m_maxTime, current_time + i * 1000);
+        //     p.m_particle[i].time.z() = (float)0.0;
+        //     p.m_particle[i].time.w() = (float)1.0 / p.m_particle[i].time.x();
+        //     }
+        // };
 
-        // Create and launch threads
-        for (unsigned int i = 0; i < numThreads; ++i) {
-            threads.emplace_back(threadWork, i);
-        }
-
-        // Wait for all threads to complete
-        for (auto& thread : threads) {
-            thread.join();
-        }
+        
         
 
         // for (size_t i = startId; i < endId; ++i)

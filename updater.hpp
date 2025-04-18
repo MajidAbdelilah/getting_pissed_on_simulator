@@ -19,17 +19,17 @@ public:
     sycl::vec<float, 4> m_globalAcceleration;
     float m_floorY{ -1.0f };
 	float m_bounceFactor{ 2.5f };
-    std::vector<sycl::vec<float, 4>> m_attractors; // .w is force
+    // std::vector<sycl::vec<float, 4>> m_attractors; // .w is force
     sycl::queue q;
 public:
-    size_t collectionSize() const { return m_attractors.size(); }
-	void add(const sycl::vec<float, 4> &attr) { m_attractors.push_back(attr); }
-	sycl::vec<float, 4> &get(size_t id) { return m_attractors[id]; }
+    // size_t collectionSize() const { return m_attractors.size(); }
+	// void add(const sycl::vec<float, 4> &attr) { m_attractors.push_back(attr); }
+	// sycl::vec<float, 4> &get(size_t id) { return m_attractors[id]; }
 public:
-    EulerUpdater(): q(sycl::cpu_selector_v) { 
-        m_attractors.push_back({15, 4, -3, 10}); 
-        m_attractors.push_back({-1, 20, 13, 10});
-        m_attractors.push_back({-10, 0, 0, 10});
+    EulerUpdater(): q(sycl::gpu_selector_v) { 
+        // m_attractors.push_back({15, 4, -3, 10}); 
+        // m_attractors.push_back({-1, 20, 13, 10});
+        // m_attractors.push_back({-10, 0, 0, 10});
     }
     virtual void update(double dt, Particle_system &p) override
     {
@@ -46,10 +46,8 @@ public:
         
         // const size_t countAttractors = m_attractors.size();
         
-        std::vector<size_t> to_kill;
-        to_kill.reserve(endId); // Reserve space for to_kill
         // sycl::buffer<Particle, 1> buf(p.m_particle);
-        sycl::buffer<sycl::vec<float, 4>> m_attractors_buf(m_attractors);
+        // sycl::buffer<sycl::vec<float, 4>> m_attractors_buf(m_attractors);
         // size_t buf_size = p.m_particle.size();
         float m_floorY = this->m_floorY;
         float m_bounceFactor = this->m_bounceFactor;

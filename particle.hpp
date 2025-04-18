@@ -67,8 +67,8 @@ void swap(T &a, T &b)
 class Particle_system
 {
 public:
-    Particle_system(size_t p_count):  q(sycl::cpu_selector_v), m_countAlive(0){
-        m_particle = sycl::malloc_shared<Particle>(p_count, q);
+    Particle_system(size_t p_count):  q(sycl::gpu_selector_v), m_countAlive(0){
+        m_particle = sycl::malloc_device<Particle>(p_count, q);
         size = p_count;
     }
 
@@ -76,26 +76,23 @@ public:
         sycl::free(m_particle, q);
     }
     
-    void kill(std::vector<size_t> &k, size_t kill_count)
+    void kill(size_t *k, size_t kill_count)
     {
         if(m_countAlive == 0) return;
-        if(k.size() == 0 || kill_count == 0) return;
+        if(k == nullptr || kill_count == 0) return;
         if(kill_count > m_countAlive) throw std::runtime_error("k size is greater than m_countAlive " + std::to_string(kill_count) + ", " + std::to_string(m_countAlive));
         // Create SYCL buffer from the vector data
-        // sycl::buffer<Particle, 1> buf(m_particle.data(), sycl::range<1>(m_particle.size()));
-        // sycl::buffer<Particle, 1> buf(m_particle);
-        sycl::buffer<size_t, 1> k_buf(k);
         
         // size_t k_size = k.size();
         size_t count_alive = m_countAlive;
         size_t thread_count = q.get_device().get_info<sycl::info::device::max_compute_units>() * 128;
         q.submit([&](sycl::handler &h){
             auto buf_acc = m_particle;
-            auto k_acc = k_buf.get_access<sycl::access::mode::read>(h);
-            h.parallel_for(sycl::range<1>(k.size()), [=](sycl::id<1> idx_d){
+            auto k_acc = k;
+            h.parallel_for(sycl::range<1>(kill_count), [=](sycl::id<1> idx_d){
                 size_t idx = idx_d.get(0);
                 size_t index = k_acc[idx];
-                if(index == SIZE_MAX) return;
+                // if(index == SIZE_MAX) return;
                 buf_acc[index].alive = false;
                 // float m_maxTime = 20.0f;
                 // buf_acc[index].time.x() = buf_acc[index].time.y() = m_maxTime;
@@ -116,11 +113,15 @@ public:
         
     }
 
-    void wake(std::vector<size_t> &w)
+    void wake(size_t *w, size_t size)
     {
+        if(w == nullptr) return;
+        if(size == 0) return;
+        if(size > (this->size - m_countAlive)) throw std::runtime_error("w size is greater than m_countAlive " + std::to_string(size) + ", " + std::to_string(m_countAlive));
+
         // if((m_countAlive + w.size()) > size) return;
         // sycl::buffer<Particle, 1> buf(m_particle.data(), sycl::range<1>(m_particle.size()));
-        sycl::buffer<size_t, 1> w_buf(w);
+        // sycl::buffer<size_t, 1> w_buf(w);
         // sycl::buffer<Particle, 1> buf(m_particle);
         // size_t w_size = w.size();
         
@@ -159,12 +160,12 @@ public:
         size_t count_alive = m_countAlive;
         q.submit([&](sycl::handler &h){
             auto buf_acc = m_particle;
-            auto w_acc = w_buf.template get_access<sycl::access::mode::read>(h);
-            // std::cout << "loop_size: " << w.size() - erased << ", " << w.size() << ", " << erased << "\n";
-            h.parallel_for(sycl::range<1>(w.size() - erased), [=](sycl::id<1> idx_d){
+            auto w_acc = w; // Updated to use the correct access
+            // std::cout << "loop_size: " << size - erased << ", " << size << ", " << erased << "\n"; // Updated to use size parameter
+            h.parallel_for(sycl::range<1>(size - erased), [=](sycl::id<1> idx_d){
                 size_t idx = idx_d.get(0);
                 size_t index = w_acc[idx];
-                // if(index == SIZE_MAX) return;
+                // if(index == SIZE_MAX) return; // Added check for SIZE_MAX
                 buf_acc[index].alive = true;
                 swap(buf_acc[index], buf_acc[count_alive + idx]);
             });
@@ -172,7 +173,7 @@ public:
 
         q.wait();
         // Update the count of alive particles
-        m_countAlive += w.size() - erased;
+        m_countAlive += size - erased;
 
     }
 

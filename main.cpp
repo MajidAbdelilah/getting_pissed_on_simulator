@@ -18,7 +18,7 @@ class fill_with_index
     }
 };
 
-void emit(double dt, Particle_system &p, size_t m_emitRate)
+void emit(double dt, Particle_system &p, size_t m_emitRate, size_t *w)
 {
     if (p.m_countAlive >= p.size) return; // No more particles to emit
     if (m_emitRate <= 0) return;              // No emission rate
@@ -28,11 +28,11 @@ void emit(double dt, Particle_system &p, size_t m_emitRate)
     const size_t endId = std::min(startId + maxNewParticles, p.size -1);
     if((endId - startId) <= 0) return; 
     // std::cout << "startId: " << startId << ", endId: " << endId << "\n";
-    std::vector<size_t> w(endId - startId);
+    // std::vector<size_t> w(endId - startId);
     // (fill_with_index(startId), endId - startId);
-    sycl::buffer<size_t, 1> w_buf(w);
+    // sycl::buffer<size_t, 1> w_buf(w);
     p.q.submit([&](sycl::handler &h){
-        auto w_acc = w_buf.get_access<sycl::access::mode::write>(h);
+        auto w_acc = w;
         h.parallel_for(sycl::range<1>(endId - startId), [=](sycl::id<1> idx_d){
             size_t idx = idx_d.get(0);
             w_acc[idx] = startId + idx;
@@ -47,7 +47,7 @@ void emit(double dt, Particle_system &p, size_t m_emitRate)
     // {
     //     w[i - startId] = i;
     // }
-    p.wake(w);
+    p.wake(w, endId - startId);
     Gen gen;
     // BasicVelGen bvg;
     // BasicColorGen bc;
@@ -67,15 +67,15 @@ void emit(double dt, Particle_system &p, size_t m_emitRate)
     // w.clear();
 }
 
-void draw(Image &im, Texture2D &tex, size_t width, size_t hieght, Particle_system &p, sycl::queue &q)
+void draw(Image &im, Texture2D &tex, sycl::vec<char, 4> *color, size_t width, size_t hieght, Particle_system &p, sycl::queue &q)
 { 
     (void)p;
-    sycl::buffer<Color, 1> buf(((Color*)im.data), sycl::range<1>(im.width*im.height));
+    // sycl::buffer<Color, 1> buf(((Color*)im.data), sycl::range<1>(im.width*im.height));
     q.submit([&](sycl::handler &h){
-        auto acc = buf.get_access<sycl::access::mode::write>(h);
+        auto acc = color;
         h.parallel_for(sycl::range<1>(width*hieght), [=](sycl::id<1> idx_d){
             size_t idx = idx_d.get(0);
-            acc[idx] = BLACK;
+            acc[idx] = sycl::vec<char, 4>{0, 0, 0, 255};
         });
     }).wait();
     q.wait();
@@ -84,7 +84,7 @@ void draw(Image &im, Texture2D &tex, size_t width, size_t hieght, Particle_syste
     
     q.submit([&](sycl::handler &h){
         auto acc = p.m_particle;
-        auto acc_im = buf.get_access<sycl::access::mode::write>(h);
+        auto acc_col = color;
         h.parallel_for(sycl::range<1>(p.m_countAlive), [=](sycl::id<1> idx_d){
             size_t idx = idx_d.get(0);
             if(acc[idx].alive)
@@ -96,14 +96,15 @@ void draw(Image &im, Texture2D &tex, size_t width, size_t hieght, Particle_syste
                 if((x < (long)width && x >= 0) 
                 && (y < (long)hieght && y >= 0))
                 {
-                    acc_im[y * im.width + x] = WHITE;
+                    acc_col[y * im.width + x] = sycl::vec<char, 4>{255, 255, 255, 255};
                 }
             }
         });
     }).wait();
     q.wait();
     
-
+    q.copy<sycl::vec<char, 4>>(color, (sycl::vec<char, 4>*)im.data, width*hieght);
+    q.wait();
     // for(size_t i = 0; i < p.m_countAlive; ++i)
     // {
     //     if(p.m_particle[i].alive)
@@ -133,9 +134,10 @@ void draw(Image &im, Texture2D &tex, size_t width, size_t hieght, Particle_syste
     //         }
     //     }
     // }
-    // UnloadImageColors(color);
-    UnloadTexture(tex);
-    tex =  LoadTextureFromImage(im);
+    // UnloadImageColors(color)
+    UpdateTexture(tex, im.data);
+    // UnloadTexture(tex);
+    // tex =  LoadTextureFromImage(im);
     DrawTexture(tex, -width, -hieght, {255, 255, 255, 255});
     
 }
@@ -157,9 +159,16 @@ int main()
     cam.rotation = 0.0f;
     cam.zoom = 1.0f;
     Image canvas = GenImageColor(screenWidth, screenHeight, {255, 255, 255, 255});
+    sycl::vec<char, 4> *color = sycl::malloc_device<sycl::vec<char, 4>>(screenWidth*screenHeight, system.q);
     ImageFormat(&canvas, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
     Texture2D tex = LoadTextureFromImage(canvas);
-    Color *color = LoadImageColors(canvas);
+    // Color *color = LoadImageColors(canvas);
+    size_t *to_kill = sycl::malloc_device<size_t>(system.size, system.q);
+    size_t *to_kill_host = sycl::malloc_host<size_t>(system.size, system.q);
+    const size_t thread_count = system.q.get_device().get_info<sycl::info::device::max_compute_units>() * 128;
+    size_t *kill_count_local = sycl::malloc_shared<size_t>(thread_count, system.q);
+    size_t *w = sycl::malloc_shared<size_t>(system.size, system.q);
+
     while (!WindowShouldClose())
     // while(true)
     {
@@ -168,63 +177,52 @@ int main()
         // double dt = 1.0f/30.0f;
         // Update
         // system.kill({ 0, 1, 2, 3, 4 });
-        emit(dt, system, 200000);
+        emit(dt, system, 200000, w);
         eu.update(dt, system);
         // std::cout << "here 1\n";
         BeginDrawing();
         BeginMode2D(cam);
         ClearBackground(RAYWHITE);
         DrawCircle(200, 200, 100, BLACK);
-        draw(canvas, tex, screenWidth, screenHeight, system, system.q);
+        draw(canvas, tex, color, screenWidth, screenHeight, system, system.q);
         if (system.m_countAlive > 0)
         {
-            std::vector<size_t> to_kill;
-            to_kill.resize(system.m_countAlive);
+            // to_kill.resize(system.m_countAlive);
             size_t kill_count_total = 0;
-            const size_t thread_count = std::thread::hardware_concurrency();
             // std::cout << "here 2\n";
-            std::vector<std::thread> threads(thread_count);
+            // std::vector<std::thread> threads(thread_count);
             // std::cout << "thread count: " << thread_count << "\n";
             // std::mutex mutex;
             
-            std::vector<size_t> kill_count_local(thread_count);
-            for(size_t i = 0; i < thread_count; ++i)
-            {
-                kill_count_local[i] = 0;
-                // std::cout << "thread: " << i << "\n";
-                threads[i] = std::thread([&system, &to_kill, i, thread_count, &kill_count_total, &kill_count_local](){
-                    // std::cout << "here 2.1, thread: " << i << "\n";
-                    // size_t start = (system.m_countAlive / thread_count) * i;
-                    // size_t end = (system.m_countAlive / thread_count) * (i + 1);
-                    // if(i+1 == thread_count)
-                    // {
-                    //     end = system.m_countAlive;
-                    // }
-                    // std::cout << "here 2.2, thread: " << i << ", start: " << start << ", end: " << end << "\n";
-                    for (size_t j = i; j < system.m_countAlive; j+= thread_count)
+            system.q.submit([&](sycl::handler &h){
+                auto acc = system.m_particle;
+                auto count_alive = system.m_countAlive;
+                h.parallel_for(sycl::range<1>(thread_count), [=](sycl::id<1> idx_d){
+                    size_t idx = idx_d.get(0);
+                    kill_count_local[idx] = 0;
+                    for(size_t j = idx; j < count_alive; j+= thread_count)
                     {
                         to_kill[j] = SIZE_MAX;
-                        if (system.m_particle[j].alive == false || system.m_particle[j].time.x() < 0.0f){
+                        if (acc[j].alive == false || acc[j].time.x() < 0.0f){
                             to_kill[j] = j;
-                            kill_count_local[i]++;
+                            kill_count_local[idx]++;
                         }
                     }
-                    // std::cout << "thread: " << i << ", start: " << start << ", end: " << end << ", kill_count_local: " << kill_count_local[i]  << " count alive: " << system.m_countAlive << "\n";
-
-                    // std::lock_guard<std::mutex> lock(mutex);
+                    
                 });
-            }
-            
-            for(size_t i = 0; i < thread_count; ++i)
-            {
-                threads[i].join();
-            }
+            }).wait();
+            system.q.wait();
+                
             for(size_t i = 0; i < thread_count; ++i)
             {
                 kill_count_total += kill_count_local[i];
             }
-            std::sort(to_kill.begin(), to_kill.end());
-            to_kill.resize(kill_count_total);
+            system.q.copy<size_t>(to_kill, to_kill_host, system.m_countAlive);
+            system.q.wait();
+            std::sort(to_kill_host, to_kill_host + system.m_countAlive);
+            system.q.copy<size_t>(to_kill_host, to_kill, system.m_countAlive);
+            system.q.wait();
+            // to_kill.resize(kill_count_total);
             // for(size_t i = 0; i < thread_count; ++i)
             // {
             //     // threads[i] = std::thread([&system, &to_kill, i, thread_count, &kill_count_total, &mutex](){
@@ -294,7 +292,11 @@ int main()
         DrawText(TextFormat("FPS: %d", GetFPS()), 10, 90, 20, DARKGRAY);
         EndDrawing();
     }
-
+    sycl::free(to_kill, system.q);
+    sycl::free(kill_count_local, system.q);
+    UnloadImage(canvas);
+    // UnloadImageColors(color);
+    UnloadTexture(tex);
 
     CloseWindow();
 }
