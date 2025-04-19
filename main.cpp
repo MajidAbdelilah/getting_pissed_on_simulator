@@ -5,18 +5,72 @@
 #include <iostream>
 #include "include/raylib.h"
 #include "vector_cpu.hpp"
+#include "parallel_sycl_sorting.hpp"
 
-class fill_with_index
+
+void simpl_sort(size_t *data, size_t size)
 {
-    public:
-    size_t startId;
-    fill_with_index(size_t start): startId(start){}
-    size_t operator()(size_t &value, size_t idx)
+    size_t thread_count = std::thread::hardware_concurrency();
+    std::vector<std::thread> threads(thread_count);
+    std::vector<size_t> index(thread_count);
+    
+    for(size_t i = 0; i < thread_count; i++)
     {
-        (void)value;
-        return startId + idx;
+        index[i] = i;
+        threads[i] = std::thread([=, &data, &index]() {
+            // size_t start = i * (size / thread_count);
+            // size_t end = (i + 1) * (size / thread_count);
+            for(size_t j = i; j < size; j+= thread_count)
+            {
+                if(data[j] < SIZE_MAX)
+                {
+                    std::swap(data[index[i]], data[j]);
+                    index[i] += thread_count;
+                }
+            }
+        });
     }
-};
+    for(size_t i = 0; i < thread_count; i++)
+    {
+        threads[i].join();
+    }
+    size_t index_2 = 0;
+    size_t thread_counter = 0;
+    for(size_t i = 0; i < size; i++)
+    {
+
+        if(data[i] < SIZE_MAX && i != index_2) // Check if data[i] is less than SIZE_MAX
+        {
+            std::swap(data[index_2], data[i]);
+            index_2++;
+        }else if(i == index_2)
+        {
+            index_2++;
+        }
+        else if(data[i] == SIZE_MAX)
+        {
+            i += thread_count - thread_counter - 1;
+            thread_counter = 0;
+            continue;
+        }
+        thread_counter++;
+        if(thread_counter >= thread_count)
+        {
+            thread_counter = 0;
+        }
+    }
+    //         }
+    //     });
+    // }
+    // for(size_t i = 0; i < size; i++)
+    // {
+    //     if(data[i] < SIZE_MAX)
+    //     {
+    //         std::swap(data[index], data[i]);
+    //         index++;
+    //     }
+    // }
+}
 
 void emit(double dt, Particle_system &p, size_t m_emitRate, size_t *w)
 {
@@ -164,10 +218,10 @@ int main()
     Texture2D tex = LoadTextureFromImage(canvas);
     // Color *color = LoadImageColors(canvas);
     size_t *to_kill = sycl::malloc_device<size_t>(system.size, system.q);
-    size_t *to_kill_host = sycl::malloc_host<size_t>(system.size, system.q);
+    size_t *to_kill_host = sycl::malloc_shared<size_t>(system.size, system.q);
     const size_t thread_count = system.q.get_device().get_info<sycl::info::device::max_compute_units>() * 128;
     size_t *kill_count_local = sycl::malloc_shared<size_t>(thread_count, system.q);
-    size_t *w = sycl::malloc_shared<size_t>(system.size, system.q);
+    size_t *w = sycl::malloc_device<size_t>(system.size, system.q);
 
     while (!WindowShouldClose())
     // while(true)
@@ -177,7 +231,7 @@ int main()
         // double dt = 1.0f/30.0f;
         // Update
         // system.kill({ 0, 1, 2, 3, 4 });
-        emit(dt, system, 200000, w);
+        emit(dt, system, 60000, w);
         eu.update(dt, system);
         // std::cout << "here 1\n";
         BeginDrawing();
@@ -212,16 +266,21 @@ int main()
                 });
             }).wait();
             system.q.wait();
-                
+            
+                // std::accumulate(kill_count_local, kill_count_local + thread_count, 0, [&](size_t a, size_t b) {
+                //     return a + b;
+                // });
             for(size_t i = 0; i < thread_count; ++i)
             {
                 kill_count_total += kill_count_local[i];
             }
+            // std::cout << "here 3\n";
             system.q.copy<size_t>(to_kill, to_kill_host, system.m_countAlive);
             system.q.wait();
-            std::sort(to_kill_host, to_kill_host + system.m_countAlive);
+            simpl_sort(to_kill_host, system.m_countAlive);
             system.q.copy<size_t>(to_kill_host, to_kill, system.m_countAlive);
             system.q.wait();
+            // std::cout << "here 4\n";
             // to_kill.resize(kill_count_total);
             // for(size_t i = 0; i < thread_count; ++i)
             // {
@@ -294,6 +353,9 @@ int main()
     }
     sycl::free(to_kill, system.q);
     sycl::free(kill_count_local, system.q);
+    sycl::free(w, system.q);
+    sycl::free(to_kill_host, system.q);
+    sycl::free(color, system.q);
     UnloadImage(canvas);
     // UnloadImageColors(color);
     UnloadTexture(tex);

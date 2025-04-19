@@ -26,7 +26,7 @@ public:
 	// void add(const sycl::vec<float, 4> &attr) { m_attractors.push_back(attr); }
 	// sycl::vec<float, 4> &get(size_t id) { return m_attractors[id]; }
 public:
-    EulerUpdater(): q(sycl::gpu_selector_v) { 
+    EulerUpdater(): q(sycl::cpu_selector_v) { 
         // m_attractors.push_back({15, 4, -3, 10}); 
         // m_attractors.push_back({-1, 20, 13, 10});
         // m_attractors.push_back({-10, 0, 0, 10});

@@ -67,7 +67,7 @@ void swap(T &a, T &b)
 class Particle_system
 {
 public:
-    Particle_system(size_t p_count):  q(sycl::gpu_selector_v), m_countAlive(0){
+    Particle_system(size_t p_count):  q(sycl::cpu_selector_v), m_countAlive(0){
         m_particle = sycl::malloc_device<Particle>(p_count, q);
         size = p_count;
     }
