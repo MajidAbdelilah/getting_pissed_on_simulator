@@ -30,7 +30,7 @@ public:
     float m_maxTime;
     sycl::queue q;
 public:
-    Gen(): m_pos(-1000.0, -400.0, 0, 0), m_maxStartPosOffset(100.0), m_minStartCol(150.0), m_maxStartCol(170.0), m_minEndCol(230.0), m_maxEndCol(255.0), m_minStartVel(20), m_maxStartVel(50), m_minTime(10.0f), m_maxTime(15.0f), q(sycl::gpu_selector_v) { }
+    Gen(): m_pos(0.0, 0.0, 0, 0), m_maxStartPosOffset(100.0), m_minStartCol(150.0), m_maxStartCol(170.0), m_minEndCol(230.0), m_maxEndCol(255.0), m_minStartVel(-50), m_maxStartVel(50), m_minTime(10.0f), m_maxTime(50.0f), q(sycl::gpu_selector_v) { }
 
     void generate(Particle_system &p, size_t startId, size_t endId)
     {

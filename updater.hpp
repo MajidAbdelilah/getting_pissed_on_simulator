@@ -17,8 +17,8 @@ class EulerUpdater : public ParticleUpdater
 {
 public:
     sycl::vec<float, 4> m_globalAcceleration;
-    float m_floorY{ -1.0f };
-	float m_bounceFactor{ 2.5f };
+    float m_floorY{ -100.0f };
+	float m_bounceFactor{ 1.0f };
     // std::vector<sycl::vec<float, 4>> m_attractors; // .w is force
     sycl::queue q;
 public:
