@@ -67,7 +67,7 @@ void swap(T &a, T &b)
 class Particle_system
 {
 public:
-    Particle_system(size_t p_count):  q(sycl::cpu_selector_v), m_countAlive(0){
+    Particle_system(size_t p_count):  q(sycl::gpu_selector_v), m_countAlive(0){
         m_particle = sycl::malloc_device<Particle>(p_count, q);
         size = p_count;
     }
@@ -92,7 +92,7 @@ public:
             h.parallel_for(sycl::range<1>(kill_count), [=](sycl::id<1> idx_d){
                 size_t idx = idx_d.get(0);
                 size_t index = k_acc[idx];
-                // if(index == SIZE_MAX) return;
+                if(index == SIZE_MAX) return;
                 buf_acc[index].alive = false;
                 // float m_maxTime = 20.0f;
                 // buf_acc[index].time.x() = buf_acc[index].time.y() = m_maxTime;

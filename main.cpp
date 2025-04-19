@@ -12,21 +12,23 @@ void simpl_sort(size_t *data, size_t size)
 {
     size_t thread_count = std::thread::hardware_concurrency();
     std::vector<std::thread> threads(thread_count);
-    std::vector<size_t> index(thread_count);
-    
+    size_t index = 0;
+    std::mutex mtx;
     for(size_t i = 0; i < thread_count; i++)
     {
-        index[i] = i;
-        threads[i] = std::thread([=, &data, &index]() {
+        // index[i] = i;
+        threads[i] = std::thread([=, &data, &index, &mtx]() {
             // size_t start = i * (size / thread_count);
             // size_t end = (i + 1) * (size / thread_count);
             for(size_t j = i; j < size; j+= thread_count)
             {
                 if(data[j] < SIZE_MAX)
                 {
-                    std::swap(data[index[i]], data[j]);
-                    index[i] += thread_count;
+                    std::lock_guard<std::mutex> lock(mtx);
+                    std::swap(data[index], data[j]);
+                    index++;
                 }
+
             }
         });
     }
@@ -34,31 +36,31 @@ void simpl_sort(size_t *data, size_t size)
     {
         threads[i].join();
     }
-    size_t index_2 = 0;
-    size_t thread_counter = 0;
-    for(size_t i = 0; i < size; i++)
-    {
+    // size_t index_2 = 0;
+    // size_t thread_counter = 0;
+    // for(size_t i = 0; i < size; i++)
+    // {
 
-        if(data[i] < SIZE_MAX && i != index_2) // Check if data[i] is less than SIZE_MAX
-        {
-            std::swap(data[index_2], data[i]);
-            index_2++;
-        }else if(i == index_2)
-        {
-            index_2++;
-        }
-        else if(data[i] == SIZE_MAX)
-        {
-            i += thread_count - thread_counter - 1;
-            thread_counter = 0;
-            continue;
-        }
-        thread_counter++;
-        if(thread_counter >= thread_count)
-        {
-            thread_counter = 0;
-        }
-    }
+    //     if(data[i] < SIZE_MAX && i != index_2) // Check if data[i] is less than SIZE_MAX
+    //     {
+    //         std::swap(data[index_2], data[i]);
+    //         index_2++;
+    //     }else if(i == index_2)
+    //     {
+    //         index_2++;
+    //     }
+    //     else if(data[i] == SIZE_MAX)
+    //     {
+    //         i += thread_count - thread_counter - 1;
+    //         thread_counter = 0;
+    //         continue;
+    //     }
+    //     thread_counter++;
+    //     if(thread_counter >= thread_count)
+    //     {
+    //         thread_counter = 0;
+    //     }
+    // }
     //         }
     //     });
     // }
@@ -218,7 +220,7 @@ int main()
     Texture2D tex = LoadTextureFromImage(canvas);
     // Color *color = LoadImageColors(canvas);
     size_t *to_kill = sycl::malloc_device<size_t>(system.size, system.q);
-    size_t *to_kill_host = sycl::malloc_shared<size_t>(system.size, system.q);
+    size_t *to_kill_host = sycl::malloc_host<size_t>(system.size, system.q);
     const size_t thread_count = system.q.get_device().get_info<sycl::info::device::max_compute_units>() * 128;
     size_t *kill_count_local = sycl::malloc_shared<size_t>(thread_count, system.q);
     size_t *w = sycl::malloc_device<size_t>(system.size, system.q);
@@ -231,9 +233,9 @@ int main()
         // double dt = 1.0f/30.0f;
         // Update
         // system.kill({ 0, 1, 2, 3, 4 });
-        emit(dt, system, 60000, w);
+        emit(dt, system, 70000, w);
         eu.update(dt, system);
-        // std::cout << "here 1\n";
+        std::cout << "here 1\n";
         BeginDrawing();
         BeginMode2D(cam);
         ClearBackground(RAYWHITE);
@@ -243,7 +245,7 @@ int main()
         {
             // to_kill.resize(system.m_countAlive);
             size_t kill_count_total = 0;
-            // std::cout << "here 2\n";
+            std::cout << "here 2\n";
             // std::vector<std::thread> threads(thread_count);
             // std::cout << "thread count: " << thread_count << "\n";
             // std::mutex mutex;
@@ -274,13 +276,13 @@ int main()
             {
                 kill_count_total += kill_count_local[i];
             }
-            // std::cout << "here 3\n";
+            std::cout << "here 3\n";
             system.q.copy<size_t>(to_kill, to_kill_host, system.m_countAlive);
             system.q.wait();
             simpl_sort(to_kill_host, system.m_countAlive);
             system.q.copy<size_t>(to_kill_host, to_kill, system.m_countAlive);
             system.q.wait();
-            // std::cout << "here 4\n";
+            std::cout << "here 4\n";
             // to_kill.resize(kill_count_total);
             // for(size_t i = 0; i < thread_count; ++i)
             // {
@@ -341,12 +343,12 @@ int main()
             // to_kill.resize(kill_count);
             // std::cout << "kill_count: " << kill_count_total << "\n";
             system.kill(to_kill, kill_count_total);
-
+            std::cout << "here 5\n";
         }
         EndMode2D();
         DrawText("Particle System", 10, 10, 20, DARKGRAY);
         DrawText("Press ESC to exit", 10, 30, 20, DARKGRAY);
-        DrawText(TextFormat("Alive particles: %d", system.m_countAlive), 10, 50, 20, DARKGRAY);
+        DrawText(TextFormat("Alive particles : %d", system.m_countAlive), 10, 50, 20, DARKGRAY);
         DrawText(TextFormat("Total particles: %d", system.size), 10, 70, 20, DARKGRAY);
         DrawText(TextFormat("FPS: %d", GetFPS()), 10, 90, 20, DARKGRAY);
         EndDrawing();
