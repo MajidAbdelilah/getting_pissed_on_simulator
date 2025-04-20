@@ -30,7 +30,7 @@ public:
 public:
     EulerUpdater(): q(sycl::gpu_selector_v), countAlive(0), buf_countAlive(nullptr){
         buf_countAlive = sycl::malloc_device<size_t>(1, q);
-        q.memset(buf_countAlive, 0, sizeof(size_t)); 
+        q.memset(buf_countAlive, 0, sizeof(size_t)).wait(); 
         // m_attractors.push_back({15, 4, -3, 10}); 
         // m_attractors.push_back({-1, 20, 13, 10});
         // m_attractors.push_back({-10, 0, 0, 10});
@@ -50,13 +50,14 @@ public:
         const float localDT = (float)dt;
     
         const unsigned int endId = p.size;
-        size_t alive_count = 0;
-        q.memset(buf_countAlive, 0, sizeof(size_t)); 
-        // sycl::buffer<size_t, 1> buf_countAlive { &alive_count, 1 };
+                
+        // if(p.m_countAlive == 0) return;
+        float m_floorY = this->m_floorY;
+        float m_bounceFactor = this->m_bounceFactor;
+        q.memset(buf_countAlive, 0, sizeof(size_t)).wait(); 
         q.submit([&](sycl::handler &h){
-            // auto acc = buf_countAlive.get_access<sycl::access::mode::read_write>(h);
-            auto count_reduce = sycl::reduction(buf_countAlive, sycl::plus<>());
             auto buf_acc = p.m_particle;
+            auto count_reduce = sycl::reduction(buf_countAlive, sycl::plus<>());
             h.parallel_for(sycl::range<1>(p.size), count_reduce, [=](sycl::id<1> idx_d, auto &acc){
                 size_t idx = idx_d.get(0);
                 if(buf_acc[idx].alive == false)
@@ -64,34 +65,6 @@ public:
                     return ;
                 }
                 acc++;
-            });
-        }).wait();
-        q.wait();
-        q.copy<size_t>(buf_countAlive, &p.m_countAlive, 1);
-        
-        if(p.m_countAlive == 0) return;
-        // const size_t countAttractors = m_attractors.size();
-        
-        // sycl::buffer<Particle, 1> buf(p.m_particle);
-        // sycl::buffer<sycl::vec<float, 4>> m_attractors_buf(m_attractors);
-        // size_t buf_size = p.m_particle.size();
-        float m_floorY = this->m_floorY;
-        float m_bounceFactor = this->m_bounceFactor;
-        // int maxResult = 0;
-        // sycl::buffer<size_t> maxBuf { &p.m_countAlive, 1 };
-        q.submit([&](sycl::handler &h){
-            auto buf_acc = p.m_particle;
-            // auto maxReduction = reduction(maxBuf, h, sycl::plus<>());
-            h.parallel_for(sycl::range<1>(endId), [=](sycl::id<1> idx_d){
-                size_t idx = idx_d.get(0);
-                // if(buf_acc[idx].alive == false)
-                // {
-                //     return ;
-                // }
-                if(buf_acc[idx].alive == false)
-                {
-                    return ;
-                }
                 if(buf_acc[idx].time.x() < 0.0f && buf_acc[idx].alive == true)
                 {
                     buf_acc[idx].alive = false;
@@ -143,9 +116,10 @@ public:
             });
         }).wait();
 
-        q.wait();
+        // q.wait();
         // p.m_countAlive = maxBuf.get_host_access()[0];
-       
+        q.copy<size_t>(buf_countAlive, &p.m_countAlive, 1).wait();
+        // q.wait();
 
     }
 };

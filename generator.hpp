@@ -30,7 +30,7 @@ public:
     float m_maxTime;
     sycl::queue q;
 public:
-    Gen(): m_pos(0.0f), m_maxStartPosOffset(100.0), m_minStartCol(255.0f, 0, 0, 255.0f), m_maxStartCol(150, 150, 150, 255), m_minEndCol(0, 255.0f, 255.0f, 255.0f), m_maxEndCol(0, 255.0f, 255.0f, 255.0f), m_minStartVel(-50), m_maxStartVel(50), m_minTime(10.0f), m_maxTime(60.0f), q(sycl::gpu_selector_v) { }
+    Gen(): m_pos(0.0f), m_maxStartPosOffset(100.0), m_minStartCol(255.0f, 0, 0, 255.0f), m_maxStartCol(255, 150, 150, 255), m_minEndCol(0, 255.0f, 255.0f, 255.0f), m_maxEndCol(0, 255.0f, 255.0f, 255.0f), m_minStartVel(-50), m_maxStartVel(50), m_minTime(10.0f), m_maxTime(60.0f), q(sycl::gpu_selector_v) { }
 
     void generate(Particle_system &p, size_t rev_size)
     {
@@ -82,7 +82,6 @@ public:
                 
             });
         }).wait();
-        q.wait();
 
         // p.m_countAlive += rev_size;
         // auto threadWork = [&](size_t threadId) {

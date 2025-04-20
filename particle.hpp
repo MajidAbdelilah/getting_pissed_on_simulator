@@ -69,7 +69,7 @@ class Particle_system
 public:
     Particle_system(size_t p_count):  q(sycl::gpu_selector_v), m_countAlive(0){
         m_particle = sycl::malloc_device<Particle>(p_count, q);
-        q.memset(m_particle, 0, sizeof(Particle) * p_count);
+        q.memset(m_particle, 0, sizeof(Particle) * p_count).wait();
         size = p_count;
     }
 

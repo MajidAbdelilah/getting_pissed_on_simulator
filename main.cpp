@@ -88,7 +88,7 @@ void draw(Image &im, Texture2D &tex, sycl::vec<char, 4> *color, size_t width, si
     // model.setScale(sycl::vec<float, 3>{1.0f, 1.0f, 1.0f});
     // model.setRotation(sycl::vec<float, 3>{0.0f, 0.0f, 0.0f});
 
-    view.setViewMatrix(sycl::vec<float, 3>{100.0f, -100.0f, 100.0f}, sycl::vec<float, 3>{0.0f, 0.0f, 0.0f}, sycl::vec<float, 3>{0.0f, 0.0f, 1.0f});
+    view.setViewMatrix(sycl::vec<float, 3>{-100.0f, -100.0f, 100.0f}, sycl::vec<float, 3>{0.0f, 0.0f, 0.0f}, sycl::vec<float, 3>{0.0f, 1.0f, 0.0f});
     
     float fov_rad = 90.0f * (M_PI / 180.0f);
     proj.setProjectionMatrix(fov_rad, static_cast<float>(width) / hieght, 0.01f, 10000.0f);
