@@ -69,6 +69,7 @@ class Particle_system
 public:
     Particle_system(size_t p_count):  q(sycl::gpu_selector_v), m_countAlive(0){
         m_particle = sycl::malloc_device<Particle>(p_count, q);
+        q.memset(m_particle, 0, sizeof(Particle) * p_count);
         size = p_count;
     }
 
@@ -76,48 +77,49 @@ public:
         sycl::free(m_particle, q);
     }
     
-    void kill(size_t *k, size_t kill_count)
+    void kill()
     {
-        if(m_countAlive == 0) return;
-        if(k == nullptr || kill_count == 0) return;
-        if(kill_count > m_countAlive) throw std::runtime_error("k size is greater than m_countAlive " + std::to_string(kill_count) + ", " + std::to_string(m_countAlive));
-        // Create SYCL buffer from the vector data
+        // if(m_countAlive == 0) return;
+        // // if(k == nullptr || kill_count == 0) return;
+        // // if(kill_count > m_countAlive) throw std::runtime_error("k size is greater than m_countAlive " + std::to_string(kill_count) + ", " + std::to_string(m_countAlive));
+        // // Create SYCL buffer from the vector data
         
-        // size_t k_size = k.size();
-        size_t count_alive = m_countAlive;
-        size_t thread_count = q.get_device().get_info<sycl::info::device::max_compute_units>() * 128;
-        q.submit([&](sycl::handler &h){
-            auto buf_acc = m_particle;
-            auto k_acc = k;
-            h.parallel_for(sycl::range<1>(kill_count), [=](sycl::id<1> idx_d){
-                size_t idx = idx_d.get(0);
-                size_t index = k_acc[idx];
-                if(index == SIZE_MAX) return;
-                buf_acc[index].alive = false;
-                // float m_maxTime = 20.0f;
-                // buf_acc[index].time.x() = buf_acc[index].time.y() = m_maxTime;
-                // buf_acc[index].time.z() = (float)0.0;
-                // buf_acc[index].time.w() = (float)1.0 / buf_acc[index].time.x();
-                swap(buf_acc[index], buf_acc[(count_alive - idx) - 1]);
+        // // size_t k_size = k.size();
+        // size_t count_alive = m_countAlive;
+        // // size_t thread_count = q.get_device().get_info<sycl::info::device::max_compute_units>() * 128;
+        // size_t *kill_count = sycl::malloc_device<size_t>(1, q);
+        // size_t fill = 0;
+        // q.copy<size_t>(&fill, kill_count, 1);
+        // q.wait();
+        // q.submit([&](sycl::handler &h){
+        //     auto kill_count_reduce = sycl::reduction(kill_count, sycl::plus<>());
+        //     auto buf_acc = m_particle;
+        //     auto size = this->size;
+        //     h.parallel_for(sycl::range<1>(size), kill_count_reduce, [=](sycl::id<1> idx_d, auto &kc_reduce){
+        //         auto idx = idx_d.get(0);
+        //         if (buf_acc[idx].time.x() < 0.0f && buf_acc[idx].alive == true) {
+        //             buf_acc[idx].alive = false;
+        //             kc_reduce++;
+        //         }
+        //     });
+        // }).wait();
+        // // std::cout << "her 1\n";
+        // q.wait();
+        // // std::cout << "her 2\n";
+        // q.copy<size_t>(kill_count, &fill, 1);
+        // q.wait();
 
-                // Particle tmp = buf_acc[(count_alive - idx) - 1];
-                // buf_acc[(count_alive - idx) - 1] = buf_acc[index];
-                // buf_acc[index] = tmp;
-            });
-        }).wait();
-        // std::cout << "her 1\n";
-        q.wait();
-        // std::cout << "her 2\n";
-
-        this->m_countAlive -= kill_count;
+        // std::cout << "kill count: " << fill << "\n";
+        // this->m_countAlive -= fill;
         
+        // sycl::free(kill_count, q);
     }
 
-    void wake(size_t *w, size_t size)
+    void wake(size_t  rev_size)
     {
-        if(w == nullptr) return;
-        if(size == 0) return;
-        if(size > (this->size - m_countAlive)) throw std::runtime_error("w size is greater than m_countAlive " + std::to_string(size) + ", " + std::to_string(m_countAlive));
+        // if(w == nullptr) return;
+        // if(size == 0) return;
+        // if(size > (this->size - m_countAlive)) throw std::runtime_error("w size is greater than m_countAlive " + std::to_string(size) + ", " + std::to_string(m_countAlive));
 
         // if((m_countAlive + w.size()) > size) return;
         // sycl::buffer<Particle, 1> buf(m_particle.data(), sycl::range<1>(m_particle.size()));
@@ -125,7 +127,7 @@ public:
         // sycl::buffer<Particle, 1> buf(m_particle);
         // size_t w_size = w.size();
         
-        size_t erased = 0;
+        // size_t erased = 0;
         // for(size_t idx = 0; idx < w_size; ++idx)
         // {
         //     // std::cout << w[idx] << "\n";
@@ -157,23 +159,38 @@ public:
         // if(w.size() == 0) return;
 
         // w_size = w.size();
-        size_t count_alive = m_countAlive;
-        q.submit([&](sycl::handler &h){
-            auto buf_acc = m_particle;
-            auto w_acc = w; // Updated to use the correct access
-            // std::cout << "loop_size: " << size - erased << ", " << size << ", " << erased << "\n"; // Updated to use size parameter
-            h.parallel_for(sycl::range<1>(size - erased), [=](sycl::id<1> idx_d){
-                size_t idx = idx_d.get(0);
-                size_t index = w_acc[idx];
-                // if(index == SIZE_MAX) return; // Added check for SIZE_MAX
-                buf_acc[index].alive = true;
-                swap(buf_acc[index], buf_acc[count_alive + idx]);
-            });
-        }).wait();
+        // size_t count_alive = m_countAlive;
+        // size_t *rev_count = sycl::malloc_device<size_t>(1, q);
+        // size_t fill = 0;
+        // q.copy<size_t>(&fill, rev_count, 1);
+        // q.wait();
+        // q.submit([&](sycl::handler &h){
+        //     auto buf_acc = m_particle;
+        //     // auto w_acc = w; // Updated to use the correct access
+        //     // std::cout << "loop_size: " << size - erased << ", " << size << ", " << erased << "\n"; // Updated to use size parameter
+        //     h.parallel_for(sycl::range<1>(size), [=](sycl::id<1> idx_d){
+        //         size_t idx = idx_d.get(0);
+                
+        //         if (buf_acc[idx].alive == false && *rev_count < rev_size) {
+                    
+        //             buf_acc[idx].alive = true;
+                    
+                    
+        //             {
+        //                 sycl::atomic_ref<size_t,
+        //                 sycl::memory_order::relaxed, // Relaxed is often sufficient for counters
+        //                 sycl::memory_scope::device> // Scope depends on where particles are checked
+        //                 atomic_counter(*rev_count);
+        //                 atomic_counter.fetch_add(1);
+        //             }
 
-        q.wait();
-        // Update the count of alive particles
-        m_countAlive += size - erased;
+        //         }
+        //     });
+        // }).wait();
+
+        // q.wait();
+        // // Update the count of alive particles
+        // m_countAlive += rev_size;
 
     }
 

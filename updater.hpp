@@ -8,17 +8,19 @@ class ParticleUpdater
 {
 public:
     ParticleUpdater() { }
-    virtual ~ParticleUpdater() { }
+     ~ParticleUpdater() { }
 
-    virtual void update(double dt, Particle_system &p) = 0;
+     void update(double dt, Particle_system &p);
 };
 
-class EulerUpdater : public ParticleUpdater
+class EulerUpdater
 {
 public:
     sycl::vec<float, 4> m_globalAcceleration;
-    float m_floorY{ -100.0f };
-	float m_bounceFactor{ 1.0f };
+    float m_floorY{ 1000.0f };
+	float m_bounceFactor{ 2.0f };
+    size_t countAlive;
+    size_t *buf_countAlive;
     // std::vector<sycl::vec<float, 4>> m_attractors; // .w is force
     sycl::queue q;
 public:
@@ -26,14 +28,19 @@ public:
 	// void add(const sycl::vec<float, 4> &attr) { m_attractors.push_back(attr); }
 	// sycl::vec<float, 4> &get(size_t id) { return m_attractors[id]; }
 public:
-    EulerUpdater(): q(sycl::gpu_selector_v) { 
+    EulerUpdater(): q(sycl::gpu_selector_v), countAlive(0), buf_countAlive(nullptr){
+        buf_countAlive = sycl::malloc_device<size_t>(1, q);
+        q.memset(buf_countAlive, 0, sizeof(size_t)); 
         // m_attractors.push_back({15, 4, -3, 10}); 
         // m_attractors.push_back({-1, 20, 13, 10});
         // m_attractors.push_back({-10, 0, 0, 10});
     }
-    virtual void update(double dt, Particle_system &p) override
+    ~EulerUpdater() {
+        sycl::free(buf_countAlive, q);
+    }
+     void update(double dt, Particle_system &p) 
     {
-        if(p.m_countAlive == 0) return;
+        // if(p.m_countAlive == 0) return;
         unsigned int current_time = time(0);
         m_globalAcceleration = random_vec(sycl::vec<float, 4>(-50.0f), sycl::vec<float, 4>(50.0f), current_time);
         const sycl::vec<float, 4> globalA{ dt * m_globalAcceleration.x(), 
@@ -42,8 +49,27 @@ public:
                                  0.0 };
         const float localDT = (float)dt;
     
-        const unsigned int endId = p.m_countAlive;
+        const unsigned int endId = p.size;
+        size_t alive_count = 0;
+        q.memset(buf_countAlive, 0, sizeof(size_t)); 
+        // sycl::buffer<size_t, 1> buf_countAlive { &alive_count, 1 };
+        q.submit([&](sycl::handler &h){
+            // auto acc = buf_countAlive.get_access<sycl::access::mode::read_write>(h);
+            auto count_reduce = sycl::reduction(buf_countAlive, sycl::plus<>());
+            auto buf_acc = p.m_particle;
+            h.parallel_for(sycl::range<1>(p.size), count_reduce, [=](sycl::id<1> idx_d, auto &acc){
+                size_t idx = idx_d.get(0);
+                if(buf_acc[idx].alive == false)
+                {
+                    return ;
+                }
+                acc++;
+            });
+        }).wait();
+        q.wait();
+        q.copy<size_t>(buf_countAlive, &p.m_countAlive, 1);
         
+        if(p.m_countAlive == 0) return;
         // const size_t countAttractors = m_attractors.size();
         
         // sycl::buffer<Particle, 1> buf(p.m_particle);
@@ -51,14 +77,28 @@ public:
         // size_t buf_size = p.m_particle.size();
         float m_floorY = this->m_floorY;
         float m_bounceFactor = this->m_bounceFactor;
+        // int maxResult = 0;
+        // sycl::buffer<size_t> maxBuf { &p.m_countAlive, 1 };
         q.submit([&](sycl::handler &h){
             auto buf_acc = p.m_particle;
+            // auto maxReduction = reduction(maxBuf, h, sycl::plus<>());
             h.parallel_for(sycl::range<1>(endId), [=](sycl::id<1> idx_d){
                 size_t idx = idx_d.get(0);
                 // if(buf_acc[idx].alive == false)
                 // {
                 //     return ;
                 // }
+                if(buf_acc[idx].alive == false)
+                {
+                    return ;
+                }
+                if(buf_acc[idx].time.x() < 0.0f && buf_acc[idx].alive == true)
+                {
+                    buf_acc[idx].alive = false;
+                    // max += -1;
+                    return ;
+                }
+
                 buf_acc[idx].acc += globalA;
     
                 buf_acc[idx].vel += localDT * buf_acc[idx].acc;
@@ -104,7 +144,8 @@ public:
         }).wait();
 
         q.wait();
-        
+        // p.m_countAlive = maxBuf.get_host_access()[0];
+       
 
     }
 };

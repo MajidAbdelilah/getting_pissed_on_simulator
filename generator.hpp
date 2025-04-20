@@ -30,9 +30,9 @@ public:
     float m_maxTime;
     sycl::queue q;
 public:
-    Gen(): m_pos(0.0, 0.0, 0, 0), m_maxStartPosOffset(100.0), m_minStartCol(150.0), m_maxStartCol(170.0), m_minEndCol(230.0), m_maxEndCol(255.0), m_minStartVel(-50), m_maxStartVel(50), m_minTime(10.0f), m_maxTime(50.0f), q(sycl::gpu_selector_v) { }
+    Gen(): m_pos(0.0f), m_maxStartPosOffset(100.0), m_minStartCol(255.0f, 0, 0, 255.0f), m_maxStartCol(150, 150, 150, 255), m_minEndCol(0, 255.0f, 255.0f, 255.0f), m_maxEndCol(0, 255.0f, 255.0f, 255.0f), m_minStartVel(-50), m_maxStartVel(50), m_minTime(10.0f), m_maxTime(60.0f), q(sycl::gpu_selector_v) { }
 
-    void generate(Particle_system &p, size_t startId, size_t endId)
+    void generate(Particle_system &p, size_t rev_size)
     {
         sycl::vec<float, 4> posMin{ m_pos.x() - m_maxStartPosOffset.x(), m_pos.y() - m_maxStartPosOffset.y(), m_pos.z() - m_maxStartPosOffset.z(), 1.0 };
         sycl::vec<float, 4> posMax{ m_pos.x() + m_maxStartPosOffset.x(), m_pos.y() + m_maxStartPosOffset.y(), m_pos.z() + m_maxStartPosOffset.z(), 1.0 };
@@ -57,20 +57,34 @@ public:
             auto m_maxStartVel = this->m_maxStartVel;
             auto m_minTime = this->m_minTime;
             auto m_maxTime = this->m_maxTime;
-            h.parallel_for(sycl::range<1>(endId - startId), [=](sycl::id<1> idx_d){
+            size_t size_all = p.size;
+            // sycl::buffer<size_t> maxBuf { &p.m_countAlive, 1 };
+            // auto maxReduction = reduction(maxBuf, h, sycl::plus<>());
+            // std::cout << "rev_size = " << rev_size << "\n";
+            h.parallel_for(sycl::range<1>(rev_size), [=](sycl::id<1> idx_d){
                 size_t idx = idx_d.get(0);
-                size_t i = startId + idx;
+                for(size_t i = idx; i < size_all; i += rev_size)
+                {
+                    if (buf_acc[i].alive == false) {
+                        buf_acc[i].alive = true;
+                        buf_acc[i].pos = random_vec(posMin, posMax, current_time + i * 1000);
+                        buf_acc[i].startCol = random_vec(m_minStartCol, m_maxStartCol, current_time + i * 1000);
+                        buf_acc[i].endCol = random_vec(m_minEndCol, m_maxEndCol, current_time + i * 1000);
+                        buf_acc[i].vel = random_vec(m_minStartVel, m_maxStartVel, current_time + i * 1000);
+                        buf_acc[i].time.x() = buf_acc[i].time.y() = random_rangef(m_minTime, m_maxTime, current_time + i * 1000);
+                        buf_acc[i].time.z() = (float)0.0;
+                        buf_acc[i].time.w() = (float)1.0 / buf_acc[i].time.x();
+                        // max += 1;
+                        return ;
+                    }
+                }
+                // size_t i = idx;
                 
-                buf_acc[i].pos = random_vec(posMin, posMax, current_time + i * 1000);
-                buf_acc[i].startCol = random_vec(m_minStartCol, m_maxStartCol, current_time + i * 1000);
-                buf_acc[i].endCol = random_vec(m_minEndCol, m_maxEndCol, current_time + i * 1000);
-                buf_acc[i].vel = random_vec(m_minStartVel, m_maxStartVel, current_time + i * 1000);
-                buf_acc[i].time.x() = buf_acc[i].time.y() = random_rangef(m_minTime, m_maxTime, current_time + i * 1000);
-                buf_acc[i].time.z() = (float)0.0;
-                buf_acc[i].time.w() = (float)1.0 / buf_acc[i].time.x();
             });
         }).wait();
         q.wait();
+
+        // p.m_countAlive += rev_size;
         // auto threadWork = [&](size_t threadId) {
         //     // Start at threadId and increment by numThreads
         //     // std::cout << "thread id = " << threadId << "\n";

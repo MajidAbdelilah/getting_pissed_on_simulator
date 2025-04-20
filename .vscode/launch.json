@@ -1,0 +1,55 @@
+{
+    "configurations": [
+        {
+            "name": "(gdb-oneapi) a.out Launch",
+            "miDebuggerPath": "gdb-oneapi",
+            "MIMode": "gdb",
+            "type": "cppdbg",
+            "request": "launch",
+            "preLaunchTask": "",
+            "postDebugTask": "",
+            "stopAtEntry": true,
+            "program": "/home/amajid/eclipse-workspace/particle_system/a.out",
+            "cwd": "${workspaceFolder}/build",
+            "args": [],
+            "environment": [
+                {
+                    "name": "ZET_ENABLE_PROGRAM_DEBUGGING",
+                    "value": "1"
+                },
+                {
+                    "name": "IGC_EnableGTLocationDebugging",
+                    "value": "1"
+                }
+            ],
+            "externalConsole": false,
+            "setupCommands": [
+                {
+                    "description": "Disable MI-async",
+                    "text": "set mi-async off",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Enable auto-load for all paths. Considered a security risk. See link for details: https://sourceware.org/gdb/current/onlinedocs/gdb.html/Auto_002dloading-safe-path.html",
+                    "text": "set auto-load safe-path /",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "set print pretty on",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set Disassembly Flavor to Intel",
+                    "text": "set disassembly intel",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Do not display function arguments when printing a stack frame",
+                    "text": "set print frame-arguments none",
+                    "ignoreFailures": true
+                }
+            ]
+        }
+    ]
+}
