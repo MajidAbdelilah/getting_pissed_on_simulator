@@ -29,8 +29,13 @@ public:
     float m_minTime;
     float m_maxTime;
     sycl::queue q;
+    size_t *rev_count_tmp;
 public:
-    Gen(): m_pos(0.0f), m_maxStartPosOffset(100.0), m_minStartCol(255.0f, 0, 0, 255.0f), m_maxStartCol(255, 150, 150, 255), m_minEndCol(0, 255.0f, 255.0f, 255.0f), m_maxEndCol(0, 255.0f, 255.0f, 255.0f), m_minStartVel(-50), m_maxStartVel(50), m_minTime(10.0f), m_maxTime(60.0f), q(sycl::gpu_selector_v) { }
+    Gen(): m_pos(0.0f), m_maxStartPosOffset(100.0), m_minStartCol(255.0f, 0, 0, 255.0f), m_maxStartCol(255, 150, 150, 255), m_minEndCol(0, 255.0f, 255.0f, 255.0f), m_maxEndCol(0, 255.0f, 255.0f, 255.0f), m_minStartVel(-50), m_maxStartVel(50), m_minTime(10.0f), m_maxTime(60.0f), q(sycl::gpu_selector_v) 
+    { 
+        rev_count_tmp = sycl::malloc_device<size_t>(1, q);
+        q.memset(rev_count_tmp, 0, sizeof(size_t)).wait();
+    }
 
     void generate(Particle_system &p, size_t rev_size)
     {
@@ -46,6 +51,8 @@ public:
         // threads.reserve(numThreads);
         unsigned int current_time = time(0);
 
+        q.memset(rev_count_tmp, 0, sizeof(size_t)).wait();
+
         // Lambda function for thread work with strided access pattern
         q.submit([&](sycl::handler &h){
             auto buf_acc = p.m_particle;
@@ -58,27 +65,34 @@ public:
             auto m_minTime = this->m_minTime;
             auto m_maxTime = this->m_maxTime;
             size_t size_all = p.size;
+            size_t *rev_count_tmp = this->rev_count_tmp;
             // sycl::buffer<size_t> maxBuf { &p.m_countAlive, 1 };
             // auto maxReduction = reduction(maxBuf, h, sycl::plus<>());
             // std::cout << "rev_size = " << rev_size << "\n";
-            h.parallel_for(sycl::range<1>(rev_size), [=](sycl::id<1> idx_d){
+            h.parallel_for(sycl::range<1>(size_all), [=](sycl::id<1> idx_d){
                 size_t idx = idx_d.get(0);
-                for(size_t i = idx; i < size_all; i += rev_size)
+                if (buf_acc[idx].alive == false && *rev_count_tmp < rev_size)
                 {
-                    if (buf_acc[i].alive == false) {
-                        buf_acc[i].alive = true;
-                        buf_acc[i].pos = random_vec(posMin, posMax, current_time + i * 1000);
-                        buf_acc[i].startCol = random_vec(m_minStartCol, m_maxStartCol, current_time + i * 1000);
-                        buf_acc[i].endCol = random_vec(m_minEndCol, m_maxEndCol, current_time + i * 1000);
-                        buf_acc[i].vel = random_vec(m_minStartVel, m_maxStartVel, current_time + i * 1000);
-                        buf_acc[i].time.x() = buf_acc[i].time.y() = random_rangef(m_minTime, m_maxTime, current_time + i * 1000);
-                        buf_acc[i].time.z() = (float)0.0;
-                        buf_acc[i].time.w() = (float)1.0 / buf_acc[i].time.x();
+
+                    sycl::atomic_ref<size_t, sycl::memory_order::relaxed, sycl::memory_scope::device> rev_ref(*rev_count_tmp);
+                    size_t prev_val =  rev_ref.fetch_add(1);
+                    if( prev_val < rev_size)
+                    {
+                        buf_acc[idx].alive = true;
+                        buf_acc[idx].pos = random_vec(posMin, posMax, current_time + idx * 1000);
+                        buf_acc[idx].startCol = random_vec(m_minStartCol, m_maxStartCol, current_time + idx * 1000);
+                        buf_acc[idx].endCol = random_vec(m_minEndCol, m_maxEndCol, current_time + idx * 1000);
+                        buf_acc[idx].vel = random_vec(m_minStartVel, m_maxStartVel, current_time + idx * 1000);
+                        buf_acc[idx].time.x() = buf_acc[idx].time.y() = random_rangef(m_minTime, m_maxTime, current_time + idx * 1000);
+                        buf_acc[idx].time.z() = (float)0.0;
+                        buf_acc[idx].time.w() = (float)1.0 / buf_acc[idx].time.x();
+                        
+                        // rev_ref.fetch_sub(1);
                         // max += 1;
-                        return ;
+                        // return ;
                     }
+                    // size_t i = idx;
                 }
-                // size_t i = idx;
                 
             });
         }).wait();

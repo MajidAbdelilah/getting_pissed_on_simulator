@@ -128,6 +128,14 @@ void draw(Image &im, Texture2D &tex, sycl::vec<char, 4> *color, size_t width, si
                 if (screenX >= 0 && screenX < width && screenY >= 0 && screenY < hieght)
                 {
                     long pixelIndex = static_cast<long>(screenY) * width + static_cast<long>(screenX);
+                    // if(acc_col[pixelIndex].x() == 0 && acc_col[pixelIndex].y() == 0 && acc_col[pixelIndex].z() == 0)
+                    // {
+                    //     acc_col[pixelIndex] = acc[idx].col.convert<char>(); // Draw particle color
+                    // }
+                    // else
+                    // {
+                    //     acc_col[pixelIndex] |=  acc[idx].col.convert<char>(); // Blend with existing color
+                    // }
                     acc_col[pixelIndex] |= acc[idx].col.convert<char>(); // Draw particle color
                 }
             }
