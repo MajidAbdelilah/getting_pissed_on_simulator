@@ -1,3 +1,4 @@
+#pragma once
 #include <sycl/sycl.hpp>
 class Mat4x4
 {
@@ -125,16 +126,16 @@ public:
     }
     
     // Set rotation matrix (row-major format)
-    void setRotation(const sycl::vec<float, 3> &rotation)
+    void setRotation(const sycl::vec<float, 3> &rotation, const float angle)
     {
         setIdentity();
-        float cx = sycl::cos(rotation.x());
-        float sx = sycl::sin(rotation.x());
+        float rad = angle * (M_PI / 180.0f);
+        float cx = sycl::cos(rad);
+        float sx = sycl::sin(rad);
         float cy = sycl::cos(rotation.y());
         float sy = sycl::sin(rotation.y());
         float cz = sycl::cos(rotation.z());
         float sz = sycl::sin(rotation.z());
-
         // Row 0
         m[0][0] = cy * cz;
         m[0][1] = cy * sz;
@@ -158,6 +159,20 @@ public:
         m[0][0] = scale.x();
         m[1][1] = scale.y();
         m[2][2] = scale.z();
+    }
+
+    // transpose
+    Mat4x4 transpose() const
+    {
+        Mat4x4 result;
+        for (int i = 0; i < 4; ++i)
+        {
+            for (int j = 0; j < 4; ++j)
+            {
+                result.m[i][j] = m[j][i];
+            }
+        }
+        return result;
     }
     
     // Other matrix operations can be added here

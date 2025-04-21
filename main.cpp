@@ -8,6 +8,7 @@
 #include "parallel_sycl_sorting.hpp"
 #include "math.hpp"
 #include <cmath> // For M_PI if available, otherwise define PI
+#include "renderer.hpp"
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -68,87 +69,6 @@ void emit(double dt, Particle_system &p, size_t m_emitRate)
     // std::cout << "here -2\n";
 }
 
-void draw(Image &im, Texture2D &tex, sycl::vec<char, 4> *color, size_t width, size_t hieght, Particle_system &p, sycl::queue &q)
-{ 
-    (void)p;
-    q.submit([&](sycl::handler &h){
-        auto acc = color;
-        h.parallel_for(sycl::range<1>(width*hieght), [=](sycl::id<1> idx_d){
-            size_t idx = idx_d.get(0);
-            acc[idx] = sycl::vec<char, 4>{0, 0, 0, 255};
-        });
-    }).wait();
-    q.wait();
-
-    Mat4x4 proj;
-    Mat4x4 view;
-    // Mat4x4 model;
-
-    // model.setTranslation(sycl::vec<float, 3>{0.0f, 0.0f, 0.0f});
-    // model.setScale(sycl::vec<float, 3>{1.0f, 1.0f, 1.0f});
-    // model.setRotation(sycl::vec<float, 3>{0.0f, 0.0f, 0.0f});
-
-    view.setViewMatrix(sycl::vec<float, 3>{-100.0f, -100.0f, 100.0f}, sycl::vec<float, 3>{0.0f, 0.0f, 0.0f}, sycl::vec<float, 3>{0.0f, 1.0f, 0.0f});
-    
-    float fov_rad = 90.0f * (M_PI / 180.0f);
-    proj.setProjectionMatrix(fov_rad, static_cast<float>(width) / hieght, 0.01f, 10000.0f);
-
-    q.submit([&](sycl::handler &h){
-        auto acc = p.m_particle;
-        auto acc_col = color;
-        h.parallel_for(sycl::range<1>(p.size), [=](sycl::id<1> idx_d){
-            size_t idx = idx_d.get(0);
-            if(acc[idx].alive == false)
-            {
-                return;
-            }
-            sycl::vec<float, 4> pos_world = acc[idx].pos;
-            sycl::vec<float, 4> pos_clip = proj * view * pos_world;
-
-            // Perspective divide (already done in matrix multiplication if w != 1)
-            // If w is 0, the point is at infinity, skip it
-            if (pos_clip.w() == 0.0f) return;
-            // pos_clip.x() *= width / 5;
-            // pos_clip.y() *= hieght / 5; // Corrected to use pos_clip.w() for height
-            
-            // Assuming perspective divide happened in operator*:
-            sycl::vec<float, 3> pos_ndc = {pos_clip.x(), pos_clip.y(), pos_clip.z()};
-
-            // Check if the point is within the clip volume (NDC range)
-            if (pos_ndc.x() >= -1.0f && pos_ndc.x() <= 1.0f &&
-                pos_ndc.y() >= -1.0f && pos_ndc.y() <= 1.0f &&
-                pos_ndc.z() >= -1.0f && pos_ndc.z() <= 1.0f) // Check Z as well
-            {
-                // Map NDC to screen coordinates
-                float screenX = (pos_ndc.x() + 1.0f) * 0.5f * width;
-                float screenY = (1.0f - pos_ndc.y()) * 0.5f * hieght; // Y is often inverted
-                // float screenX = ((pos_world.x() + width) / 2.0f); // X is often inverted
-                // float screenY = ((pos_world.y() + hieght) / 2.0f); // Y is often inverted
-                // Check if screen coordinates are within image bounds
-                if (screenX >= 0 && screenX < width && screenY >= 0 && screenY < hieght)
-                {
-                    long pixelIndex = static_cast<long>(screenY) * width + static_cast<long>(screenX);
-                    // if(acc_col[pixelIndex].x() == 0 && acc_col[pixelIndex].y() == 0 && acc_col[pixelIndex].z() == 0)
-                    // {
-                    //     acc_col[pixelIndex] = acc[idx].col.convert<char>(); // Draw particle color
-                    // }
-                    // else
-                    // {
-                    //     acc_col[pixelIndex] |=  acc[idx].col.convert<char>(); // Blend with existing color
-                    // }
-                    acc_col[pixelIndex] |= acc[idx].col.convert<char>(); // Draw particle color
-                }
-            }
-        });
-    }).wait();
-    q.wait();
-    
-    q.copy<sycl::vec<char, 4>>(color, (sycl::vec<char, 4>*)im.data, width*hieght);
-    q.wait();
-    UpdateTexture(tex, im.data);
-    DrawTexture(tex, 0, 0, WHITE);
-}
-
 int main()
 {
 
@@ -171,6 +91,7 @@ int main()
     sycl::vec<char, 4> *color = sycl::malloc_device<sycl::vec<char, 4>>(screenWidth*screenHeight, system.q);
     ImageFormat(&canvas, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
     Texture2D tex = LoadTextureFromImage(canvas);
+    Renderer renderer(screenWidth, screenHeight);
     // size_t *to_kill = sycl::malloc_device<size_t>(system.size, system.q);
     // size_t *to_kill_host = sycl::malloc_host<size_t>(system.size, system.q);
     // const size_t thread_count = system.q.get_device().get_info<sycl::info::device::max_compute_units>() * 128;
@@ -181,7 +102,8 @@ int main()
     {
         double dt = GetFrameTime();
         ClearBackground(RAYWHITE);
-        draw(canvas, tex, color, screenWidth, screenHeight, system, system.q);
+
+        renderer.draw(dt, canvas, tex, color, screenWidth, screenHeight, system, system.q);
         eu.update(dt, system);
         emit(dt, system, 30000);
         BeginDrawing();

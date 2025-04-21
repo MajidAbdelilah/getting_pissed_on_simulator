@@ -1,3 +1,5 @@
+#pragma once
+
 #include <sycl/sycl.hpp>
 
 sycl::vec<unsigned int, 4> my_srand (sycl::vec<unsigned int, 4> newseed);
