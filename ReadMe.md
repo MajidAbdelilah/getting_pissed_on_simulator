@@ -84,5 +84,5 @@ The project consists of several key components:
 
 ## License
 
-This project is available for educational purposes and personal use.
+This project is available for educational purposes and personal use only.
 
