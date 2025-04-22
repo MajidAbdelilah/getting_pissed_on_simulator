@@ -1,6 +1,6 @@
 # GPU-Accelerated Particle System
 
-A high-performance particle simulation engine built with SYCL (DPC++) for GPU acceleration and visualized with Raylib.
+A high-performance 3D particle simulation engine built with SYCL (DPC++) for GPU acceleration and visualized with Raylib.
 
 ## Overview
 
@@ -8,7 +8,7 @@ This project demonstrates real-time simulation of over a million particles with 
 
 ## Features
 
-- **Massive Particle Count:** Efficiently simulates 1,000,000+ particles in real-time
+- **Massive Particle Count:** Efficiently simulates 1,000,000+ particles in 3D space in real-time
 - **GPU Acceleration:** Full SYCL implementation for optimal GPU utilization
 - **Interactive Physics:** Includes collisions, and bounce effects
 - **Customizable Particle Properties:** Control color gradients, velocities, lifetimes, and emission rates
