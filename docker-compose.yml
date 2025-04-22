@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  particle-system:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: particle-system:latest
+    container_name: particle-system
+    restart: unless-stopped
+    privileged: true  # Needed for GPU access
+    volumes:
+      # Pass X11 socket for graphics
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      # For GPU access
+      - /dev/dri:/dev/dri
+      # For OpenCL
+      - /etc/OpenCL/vendors:/etc/OpenCL/vendors
+    environment:
+      # Display configuration
+      - DISPLAY=${DISPLAY}
+      # Disable authentication for X server
+      - XAUTHORITY=/tmp/.docker.xauth
+      # Intel SYCL configurations
+      - SYCL_DEVICE_FILTER=opencl:gpu
+      - ONEAPI_DEVICE_SELECTOR=opencl:gpu
+      # For debugging
+      - SYCL_PI_TRACE=1
+      # Ensure GPU is preferred
+      - SYCL_CACHE_PERSISTENT=1
+    devices:
+      # For direct GPU access
+      - /dev/dri:/dev/dri
+    runtime: ${GPU_RUNTIME:-runc}  # Use NVIDIA runtime if available
+    # For systems with NVIDIA GPUs, uncomment next line and comment the runtime line above
+    # runtime: nvidia
+    ipc: host  # Shared memory access
+    network_mode: host  # Simplifies display handling
+    # If you want more restricted networking, comment out network_mode and use:
+    # ports:
+    #   - "8080:8080"  # If your app uses a specific port
+    # Ensure cleanup on exit
+    stop_signal: SIGINT
+    stop_grace_period: 30s
+
+  # Configuration for development with volume mounting
+  particle-system-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder  # Only build the development stage
+    image: particle-system-dev:latest
+    container_name: particle-system-dev
+    privileged: true
+    volumes:
+      - .:/app
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - /dev/dri:/dev/dri
+      - /etc/OpenCL/vendors:/etc/OpenCL/vendors
+    environment:
+      - DISPLAY=${DISPLAY}
+      - XAUTHORITY=/tmp/.docker.xauth
+      - SYCL_DEVICE_FILTER=opencl:gpu
+      - ONEAPI_DEVICE_SELECTOR=opencl:gpu
+    devices:
+      - /dev/dri:/dev/dri
+    runtime: ${GPU_RUNTIME:-runc}
+    ipc: host
+    network_mode: host
+    working_dir: /app
+    entrypoint: ["/bin/bash"]
+    stdin_open: true
+    tty: true
+    profiles:
+      - dev  # Only start with docker-compose --profile dev up

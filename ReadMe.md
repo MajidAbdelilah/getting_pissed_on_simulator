@@ -2,6 +2,11 @@
 
 A high-performance 3D particle simulation engine built with SYCL (DPC++) for GPU acceleration and visualized with Raylib.
 
+## Demo
+
+[![GPU Particle System Demo](https://img.youtube.com/vi/stwff1vwfuw/0.jpg)](https://youtu.be/stwff1vwfuw)
+*Click the image above to watch the demo video*
+
 ## Overview
 
 This project demonstrates real-time simulation of over a million particles with physical interactions entirely on the GPU. It leverages SYCL for cross-platform GPU programming and achieves remarkable performance by utilizing parallelized computation for particle generation, physics simulation, and rendering.
