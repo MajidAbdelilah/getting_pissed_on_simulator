@@ -9,6 +9,7 @@
 #include "math.hpp"
 #include <cmath> // For M_PI if available, otherwise define PI
 #include "renderer.hpp"
+#include "input.hpp"
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -44,7 +45,7 @@ void simpl_sort(size_t *data, size_t size)
     }
 }
 
-void emit(double dt, Particle_system &p, size_t m_emitRate)
+void emit(double dt, Particle_system &p, Gen gen, size_t m_emitRate)
 {
     if (p.m_countAlive >= p.size) return; // No more particles to emit
     if (m_emitRate <= 0) return;              // No emission rate
@@ -64,7 +65,6 @@ void emit(double dt, Particle_system &p, size_t m_emitRate)
     // p.q.wait();
     // std::cout << "here -1\n";
     // p.wake(count_end - count_start);
-    Gen gen;
     gen.generate(p, count_end - count_start);
     // std::cout << "here -2\n";
 }
@@ -92,6 +92,9 @@ int main()
     ImageFormat(&canvas, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
     Texture2D tex = LoadTextureFromImage(canvas);
     Renderer renderer(screenWidth, screenHeight);
+    Gen gen;
+    MyInput input;
+    size_t emmit_count = 30000;
     // size_t *to_kill = sycl::malloc_device<size_t>(system.size, system.q);
     // size_t *to_kill_host = sycl::malloc_host<size_t>(system.size, system.q);
     // const size_t thread_count = system.q.get_device().get_info<sycl::info::device::max_compute_units>() * 128;
@@ -100,18 +103,18 @@ int main()
 
     while (!WindowShouldClose())
     {
+        BeginDrawing();
         double dt = GetFrameTime();
         ClearBackground(RAYWHITE);
-
         renderer.draw(dt, canvas, tex, color, screenWidth, screenHeight, system, system.q);
         eu.update(dt, system);
-        emit(dt, system, 30000);
-        BeginDrawing();
+        emit(dt, system, gen, emmit_count);
         DrawText("Particle System", 10, 10, 20, DARKGRAY);
         DrawText("Press ESC to exit", 10, 30, 20, DARKGRAY);
         DrawText(TextFormat("Alive particles : %d", system.m_countAlive), 10, 50, 20, DARKGRAY);
         DrawText(TextFormat("Total particles: %d", system.size), 10, 70, 20, DARKGRAY);
         DrawText(TextFormat("FPS: %d", GetFPS()), 10, 90, 20, DARKGRAY);
+        input.processInput(gen, eu, emmit_count);
         EndDrawing();
     }
     // sycl::free(to_kill, system.q);
