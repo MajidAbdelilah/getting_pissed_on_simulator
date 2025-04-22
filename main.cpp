@@ -10,6 +10,7 @@
 #include <cmath> // For M_PI if available, otherwise define PI
 #include "renderer.hpp"
 #include "input.hpp"
+#include <string>
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -69,10 +70,31 @@ void emit(double dt, Particle_system &p, Gen gen, size_t m_emitRate)
     // std::cout << "here -2\n";
 }
 
-int main()
+int main(int arn_num, char **args)
 {
+    size_t num_particles = 1000000;
+    if(std::string(args[1]) == "--help")
+    {
+        std::cout << "usage:\n";
+        std::cout << "./getting_pissed_on_simulator\n";
+        std::cout << "# running with the defualt 1,000,000 particles\n";
+        std::cout << "./getting_pissed_on_simulator -n {number of particles}\n";
+        std::cout << "# to run with a costom number of particles\n";
+        std::cout << "# example: ./getting_pissed_on_simulator -n 10000\n";
+        return 0;
+    }
+    if(std::string(args[1]) == "-n")
+    {
+        long long num = std::stoll(std::string(args[2]));
+        if(num <= 0)
+        {
+            std::cout << "must be a positive number\n";
+            return -1;
+        }
+        num_particles = std::stoul(std::string(args[2]));
+    }
 
-    Particle_system system(1000000);
+    Particle_system system(num_particles);
     
     EulerUpdater eu;
 
