@@ -74,7 +74,7 @@ The project consists of several key components:
 ## Acknowledgments
 
 - Thanks to Allah for everything. 
-- after that Thanks to my parents and friends at 1337 for their support
+- after that Thanks to my parents and my friends at 1337 for their support
 - and Special thanks to Zakaria Yamli for the creative project name 😂
 
 ## License
