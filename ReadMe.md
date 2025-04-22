@@ -1,4 +1,4 @@
-# GPU-Accelerated Particle System
+# GPU-Accelerated 3D Particle System
 
 A high-performance 3D particle simulation engine built with SYCL (DPC++) for GPU acceleration and visualized with Raylib.
 
