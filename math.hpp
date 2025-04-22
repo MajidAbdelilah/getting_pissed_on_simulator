@@ -1,5 +1,6 @@
 #pragma once
 #include <sycl/sycl.hpp>
+#define M_PI 3.14159265358979323846
 class Mat4x4
 {
 public:

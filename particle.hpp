@@ -1,9 +1,7 @@
 #pragma once
 #include <sycl/sycl.hpp>
 #include "vector_gpu.hpp"
-#include "random.hpp"
 
-using Random = effolkronium::random_static;
 sycl::vec<float, 4> random_vec(sycl::vec<float, 4> min, sycl::vec<float, 4> max);
 class Particle
 {

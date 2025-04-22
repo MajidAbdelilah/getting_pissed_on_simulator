@@ -70,30 +70,39 @@ void emit(double dt, Particle_system &p, Gen gen, size_t m_emitRate)
     // std::cout << "here -2\n";
 }
 
-int main(int arn_num, char **args)
+int main(int arg_num, char **args)
 {
     size_t num_particles = 1000000;
-    if(std::string(args[1]) == "--help")
+    if(arg_num  > 1)
     {
-        std::cout << "usage:\n";
-        std::cout << "./getting_pissed_on_simulator\n";
-        std::cout << "# running with the defualt 1,000,000 particles\n";
-        std::cout << "./getting_pissed_on_simulator -n {number of particles}\n";
-        std::cout << "# to run with a costom number of particles\n";
-        std::cout << "# example: ./getting_pissed_on_simulator -n 10000\n";
-        return 0;
-    }
-    if(std::string(args[1]) == "-n")
-    {
-        long long num = std::stoll(std::string(args[2]));
-        if(num <= 0)
-        {
-            std::cout << "must be a positive number\n";
-            return -1;
-        }
-        num_particles = std::stoul(std::string(args[2]));
-    }
 
+        if(std::string(args[1]) == "--help")
+        {
+            std::cout << "usage:\n";
+            std::cout << "./getting_pissed_on_simulator\n";
+            std::cout << "# running with the defualt 1,000,000 particles\n";
+            std::cout << "./getting_pissed_on_simulator -n {number of particles}\n";
+            std::cout << "# to run with a costom number of particles\n";
+            std::cout << "# example: ./getting_pissed_on_simulator -n 10000\n";
+            return 0;
+        }
+        if(std::string(args[1]) == "-n")
+        {
+            if(arg_num < 3)
+            {
+                std::cout << "missing number of particles\n";
+                return -1;
+            }
+            long long num = std::stoll(std::string(args[2]));
+            if(num <= 0)
+            {
+                std::cout << "must be a positive number\n";
+                return -1;
+            }
+            num_particles = std::stoul(std::string(args[2]));
+        }
+    }
+        
     Particle_system system(num_particles);
     
     EulerUpdater eu;
