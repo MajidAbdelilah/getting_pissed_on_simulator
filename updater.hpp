@@ -19,6 +19,8 @@ public:
     sycl::vec<float, 4> m_globalAcceleration;
     float m_floorY{ 1000.0f };
 	float m_bounceFactor{ 2.0f };
+    float acc_min{ -50.0f };
+    float acc_max{ 50.0f };
     size_t countAlive;
     size_t *buf_countAlive;
     // std::vector<sycl::vec<float, 4>> m_attractors; // .w is force
@@ -42,7 +44,7 @@ public:
     {
         // if(p.m_countAlive == 0) return;
         unsigned int current_time = time(0);
-        m_globalAcceleration = random_vec(sycl::vec<float, 4>(-50.0f), sycl::vec<float, 4>(50.0f), current_time);
+        m_globalAcceleration = random_vec(sycl::vec<float, 4>(acc_min), sycl::vec<float, 4>(acc_max), current_time);
         const sycl::vec<float, 4> globalA{ dt * m_globalAcceleration.x(), 
                                  dt * m_globalAcceleration.y(), 
                                  dt * m_globalAcceleration.z(), 

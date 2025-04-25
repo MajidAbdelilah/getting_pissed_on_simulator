@@ -229,6 +229,24 @@ public:
         if (IsKeyDown(KEY_LEFT_CONTROL) && IsKeyPressed(KEY_H)) {
             show_text = !show_text;
         }
+
+        if(show_text)
+        {
+            DrawText(("acc_min: " + std::to_string(updater.acc_min) + " acc_max: " + std::to_string(updater.acc_max) + " press {f7, f8} {f9, f10} to change" ).c_str(), 10, 390, 20, DARKGRAY);
+        }
+        if (IsKeyDown(KEY_F7)) {
+            updater.acc_min -= 1.0f;
+        }
+        if (IsKeyDown(KEY_F8)) {
+            updater.acc_min += 1.0f;
+        }
+        if (IsKeyDown(KEY_F9)) {
+            updater.acc_max -= 1.0f;
+        }
+        if (IsKeyDown(KEY_F10)) {
+            updater.acc_max += 1.0f;
+        }
+
     }
 
 };
