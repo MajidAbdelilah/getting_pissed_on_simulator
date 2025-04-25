@@ -71,14 +71,14 @@ public:
 
 
 
-void draw(float dt, Image &im, Texture2D &tex, sycl::vec<char, 4> *color, size_t width, size_t hieght, Particle_system &p, sycl::queue &q)
+void draw(float dt, Image &im, Texture2D &tex, sycl::vec<unsigned char, 4> *color, size_t width, size_t hieght, Particle_system &p, sycl::queue &q)
 { 
     (void)p;
     q.submit([&](sycl::handler &h){
         auto acc = color;
         h.parallel_for(sycl::range<1>(width*hieght), [=](sycl::id<1> idx_d){
             size_t idx = idx_d.get(0);
-            acc[idx] = sycl::vec<char, 4>{0, 0, 0, 255};
+            acc[idx] = sycl::vec<unsigned char, 4>{0, 0, 0, 255};
         });
     }).wait();
     q.wait();
@@ -145,14 +145,16 @@ void draw(float dt, Image &im, Texture2D &tex, sycl::vec<char, 4> *color, size_t
                     // {
                     //     acc_col[pixelIndex] |=  acc[idx].col.convert<char>(); // Blend with existing color
                     // }
-                    acc_col[pixelIndex] |= acc[idx].col.convert<char>(); // Draw particle color
+                    // sycl::atomic_fence(sycl::memory_order::acq_rel, sycl::memory_scope::device);
+                    acc_col[pixelIndex] = sycl::mix(acc_col[pixelIndex].convert<float>(), acc[idx].col, sycl::float4(0.5f)).convert<unsigned char>(); // Draw particle color
+                    // sycl::atomic_fence(sycl::memory_order::release, sycl::memory_scope::device);
                 }
             }
         });
     }).wait();
     q.wait();
     
-    q.copy<sycl::vec<char, 4>>(color, (sycl::vec<char, 4>*)im.data, width*hieght);
+    q.copy<sycl::vec<unsigned char, 4>>(color, (sycl::vec<unsigned char, 4>*)im.data, width*hieght);
     q.wait();
     UpdateTexture(tex, im.data);
     DrawTexture(tex, 0, 0, WHITE);

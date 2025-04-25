@@ -63,7 +63,7 @@ void emit(double dt, Particle_system &p, Gen gen, size_t m_emitRate)
     //         w_acc[idx] = count_start + idx;
     //     });
     // }).wait();
-    // p.q.wait();
+    // p.q.wait(); 
     // std::cout << "here -1\n";
     // p.wake(count_end - count_start);
     gen.generate(p, count_end - count_start);
@@ -119,7 +119,7 @@ int main(int arg_num, char **args)
     cam.rotation = 0.0f;
     cam.zoom = 1.0f;
     Image canvas = GenImageColor(screenWidth, screenHeight, {255, 255, 255, 255});
-    sycl::vec<char, 4> *color = sycl::malloc_device<sycl::vec<char, 4>>(screenWidth*screenHeight, system.q);
+    sycl::vec<unsigned char, 4> *color = sycl::malloc_device<sycl::vec<unsigned char, 4>>(screenWidth*screenHeight, system.q);
     ImageFormat(&canvas, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
     Texture2D tex = LoadTextureFromImage(canvas);
     Renderer renderer(screenWidth, screenHeight);
